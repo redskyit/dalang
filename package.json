@@ -1,0 +1,24 @@
+{
+  "name": "dalang",
+  "version": "0.1.0",
+  "description": "A simplified puppeteer for use with puppeteer (alpha pre-release)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/redskyit/dalang.git"
+  },
+  "keywords": [
+    "puppeteer",
+    "automation",
+    "chrome"
+  ],
+  "author": "austin.france@redskyit.com",
+  "license": "MPL-2.0",
+  "bugs": {
+    "url": "https://github.com/redskyit/dalang/issues"
+  },
+  "homepage": "https://github.com/redskyit/dalang#readme"
+}
