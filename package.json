@@ -2,7 +2,7 @@
   "name": "dalang",
   "version": "0.1.0",
   "description": "A simplified puppeteer for use with puppeteer (alpha pre-release)",
-  "main": "index.js",
+  "main": "dalang.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -20,5 +20,12 @@
   "bugs": {
     "url": "https://github.com/redskyit/dalang/issues"
   },
-  "homepage": "https://github.com/redskyit/dalang#readme"
+  "homepage": "https://github.com/redskyit/dalang#readme",
+  "dependencies": {
+    "puppeteer": "https://github.com/GoogleChrome/puppeteer"
+  },
+  "devDependencies": {
+    "jest": "^22.2.1",
+    "jest-cli": "^22.2.1"
+  }
 }
