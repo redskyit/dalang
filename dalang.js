@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer');
 const State = require('./state');
-const Jest = require('./jest');
+const Jest = require('./minijest');
 
 /**
 * The Dalang API.
@@ -24,7 +24,7 @@ class Dalang extends State {
 
   async _nodeInfo() {
 	const { page, element } = this.state;
-    return await page.evaluate(el => ({ 
+    return await page.evaluate(el => ({
 		nodeName: el.nodeName,
 		textContent: el.textContent,
 		value: el.value,
@@ -55,7 +55,7 @@ class Dalang extends State {
   // configuration
 
   config({ defaultTimeout = 30, chrome, headless = false, sloMo } = { }) {
-	this.__config = { 
+	this.__config = {
 		defaultTimeout,
 		chrome: Object.assign({}, chrome),
 		headless,
