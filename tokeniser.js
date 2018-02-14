@@ -134,19 +134,22 @@ class Tokeniser {
 }
 
 class StringTokeniser extends Tokeniser {
-  constructor(string, options) {
+  constructor(options, string) {
     super(options);
-    this.string = string;
-    this.pos = 0;
+	if (string) set(string);
+  }
+  set(string) {
+	this.string = string;
+	this.pos = 0;
   }
   get() {
     return this.string[this.pos++];
   }
 }
 
-StringTokeniser.TT_EOF = Tokeniser.TT_EOF = EOF;
-StringTokeniser.TT_NUMBER = Tokeniser.TT_NUMBER = NUMBER;
-StringTokeniser.TT_STRING = Tokeniser.TT_STRING = STRING;
-StringTokeniser.TT_SYMBOL = Tokeniser.TT_SYMBOL = SYMBOL;
+StringTokeniser.EOF = Tokeniser.EOF = EOF;
+StringTokeniser.NUMBER = Tokeniser.NUMBER = NUMBER;
+StringTokeniser.STRING = Tokeniser.STRING = STRING;
+StringTokeniser.SYMBOL = Tokeniser.SYMBOL = SYMBOL;
 
 if (typeof module !== "undefined") module.exports = { Tokeniser, StringTokeniser };

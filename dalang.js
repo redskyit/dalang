@@ -1,6 +1,8 @@
 const puppeteer = require('puppeteer');
 const State = require('./state');
 const Jest = require('./minijest');
+const Parser = require('./parser');
+const VERSION = require('./version');
 
 /**
 * The Dalang API.
@@ -13,6 +15,22 @@ class Dalang extends State {
 
   constructor() {
 	super();
+	this.__config = {
+		defaultTimeout: 30,
+		chrome: { x: 0, y: 0 },
+		headless: true,
+		sloMo: 0,
+	};
+	this.timeout = this.__config.defaultTimeout * 1000;
+  }
+
+  version() {
+	return VERSION;
+  }
+
+  async run(script) {
+	const parser = new Parser(this, { wordChars: /[A-Za-z0-9$#_\-]/ });
+	await parser.run(script);
   }
 
   get timeout() {
@@ -54,29 +72,24 @@ class Dalang extends State {
 
   // configuration
 
-  config({ defaultTimeout = 30, chrome, headless = false, sloMo } = { }) {
-	this.__config = {
-		defaultTimeout,
-		chrome: Object.assign({}, chrome),
-		headless,
-		sloMo,
-	};
+  config(config) {
+	this.__config = Object.assign(this.__config, config);
 	console.log('CONFIG: ' + JSON.stringify(this.__config));
-	this.timeout = defaultTimeout * 1000;
+  }
+
+  arg(arg) {
+	const args = this.__config.args;
+	if (args.indexOf(arg) === -1) args.push(arg);
   }
 
   // browser control
 
-  async start({ width, height, args }) {
+  async start({ width, height, args } = {}) {
 	const { sloMo, headless, chrome } = this.__config;
 	console.log(`LAUNCH: WIDTH ${width} HEIGHT ${height} HEADLESS ${headless} SLOMO ${sloMo} `);
 	args = [].concat(args||[]);
-	if (width && height) args.push(`--window-size=${width+chrome.x},${height+chrome.y}`);
-	args.push('--disable-extensions');			/* TODO make these optional? */
-	args.push('--disable-infobars');
-	args.push('--test-type=ui');
-	args.push('--enable-automation');
-	args.push('--unlimited-storage');
+	this.config({ args });
+	if (width && height) this.arg(`--window-size=${width+chrome.x},${height+chrome.y}`);
 	console.dir(args);
 	const browser = await puppeteer.launch({ headless, sloMo, args });
 	const pages = await browser.pages();
@@ -84,7 +97,13 @@ class Dalang extends State {
     	pages.push(await browser.newPage());
 	}
     this.state = { browser, pages, page: pages[0] };
-	pages[0].setViewport({ width, height });
+	if (width && height) this.viewport({ width, height });
+	return pages[0];
+  }
+
+  viewport({ width, height }) {
+	const { page } = this.state;
+	page.setViewport({ width, height });
   }
 
   async browserInfo() {
@@ -174,12 +193,25 @@ class Dalang extends State {
 	Jest.expect(text).toBe(check);
   }
 
-  async at(x,y) {
+  async at(x, y) {
 	const { page, element } = this.state;
 	const box = await this._boundingBox();
 	console.dir(box);
 	Jest.expect(box.x).toBe(x);
 	Jest.expect(box.y).toBe(y);
+  }
+
+  async size(width, height) {
+	const { page, element } = this.state;
+	const box = await this._boundingBox();
+	console.dir(box);
+	Jest.expect(box.width).toBe(width);
+	Jest.expect(box.height).toBe(height);
+  }
+
+  async tag(name) {
+    const info = await this._nodeInfo();
+	Jest.expect(info.nodeName).toBe(name);
   }
 
   // actions
@@ -190,6 +222,11 @@ class Dalang extends State {
   async click() {
 	const { page, element } = this.state;
 	return await element.click();
+  }
+
+  async screenshot(fn) {
+	const { page } = this.state;
+	await page.screenshot({ path: fn });
   }
 }
 

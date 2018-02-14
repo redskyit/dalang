@@ -18,7 +18,8 @@ L8	123abc /* is a string */
 
 test('Tokeniser', () => {
 
-  const tokeniser = new StringTokeniser(script, { wordChars: /[A-Za-z0-9$#_\-]/ });
+  const tokeniser = new StringTokeniser({ wordChars: /[A-Za-z0-9$#_\-]/ });
+  tokeniser.set(script);
 
   expect(tokeniser.next()).toEqual({ token: 'L2', type: 1, nextch: ' ', lineno: 2 });
   expect(tokeniser.next()).toEqual({ token: 'hello', type: 1, nextch: ' ', lineno: 2 });
