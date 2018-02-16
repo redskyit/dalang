@@ -17,3 +17,5 @@ class State {
 }
 
 module.exports = State;
+
+/* vim: set ai ts=2 sw=2 expandtab smarttab softtabstop=2 : */

@@ -153,3 +153,5 @@ StringTokeniser.STRING = Tokeniser.STRING = STRING;
 StringTokeniser.SYMBOL = Tokeniser.SYMBOL = SYMBOL;
 
 if (typeof module !== "undefined") module.exports = { Tokeniser, StringTokeniser };
+
+/* vim: set ai ts=2 sw=2 expandtab smarttab softtabstop=2 : */

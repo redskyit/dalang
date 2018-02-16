@@ -14,10 +14,18 @@ async function test(n,f) {
 function expect(v) {
   return {
     toBe: function(t) {
-      if (v !== t) throw new Error(`${state.name} test failed. Expected [${v}] to be [${t}]`);
+      if (v !== t) {
+        throw new Error(`${state.name} test failed. Expected [${t}] got [${v}]`);
+      }
+    },
+    toEqual: function(t) {
+      if (v != t) {
+        throw new Error(`${state.name} test failed. Expected [${t}] got [${v}]`);
+      }
     }
   }
 }
 
 module.exports = { test, expect };
 
+/* vim: set ai ts=2 sw=2 expandtab smarttab softtabstop=2 : */
