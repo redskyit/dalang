@@ -14,6 +14,11 @@ class DalangParser extends StringTokeniser {
     this.aliases = {};
     this.options = [];
     this.prefs = [];
+    this.scripts = [];
+  }
+
+  log(token, message) {
+    console.log(`[${this.scripts[this.scripts.length-1]},${token.lineno}] ${message}`);
   }
 
   async open(fn) {
@@ -30,6 +35,7 @@ class DalangParser extends StringTokeniser {
   }
 
   async run(script) {
+    this.scripts.push(script);
     const tokeniser = await this.open(script);
     let token = tokeniser.next();
     while (token.type !== EOF) {
@@ -59,12 +65,15 @@ class DalangParser extends StringTokeniser {
       throw this.exception;
     } else {
       const onsuccess = this.aliases["--onsuccess"];
-      if (onsuccess) {
-        await this.runAlias(onsuccess);
-      } else {
-        await this.dalang.close();
+      if (this.scripts.length == 1) {
+        if (onsuccess) {
+          await this.runAlias(onsuccess);
+        } else {
+          await this.dalang.close();
+        }
       }
     }
+    this.scripts.pop();
   }
 
   async runTokens(tokens) {
@@ -96,7 +105,9 @@ class DalangParser extends StringTokeniser {
 
   async runAlias(alias) {
     console.log(`run alias ${alias.name}`);
+    this.scripts.push(alias.name);
     await this.runTokens(alias.tokens);
+    this.scripts.pop();
   }
 
   async start(options) {
@@ -169,14 +180,14 @@ class DalangParser extends StringTokeniser {
         case "start":
           browser = this.browser = {};
           dalang.config({ headless: false, sloMo: 150 });
-          console.log('browser start'); 			// is a no-op we start later when we do browser size or get
+          this.log(token,'browser start'); 			// is a no-op we start later when we do browser size or get
           break;
         case "chrome":
           const chrome = browser.chrome = {};
           chrome.x = next(NUMBER).token;
           next(SYMBOL, ',');
           chrome.y = next(NUMBER).token;
-          console.log('browser chrome ' + JSON.stringify(chrome));
+          this.log(token, 'browser chrome ' + JSON.stringify(chrome));
           dalang.config({ chrome });
           break;
         case "size":
@@ -184,13 +195,15 @@ class DalangParser extends StringTokeniser {
           size.width = next(NUMBER).token;
           next(SYMBOL, ',');
           size.height = next(NUMBER).token;
-          console.log('browser size ' + JSON.stringify(size));
+          this.log(token,'browser size ' + JSON.stringify(size));
           break;
         case "get":
           if (!browser.page) {
             browser.page = await this.start(Object.assign({}, browser.size, { args: this.options }));
           }
-          await dalang.get(next(STRING).token);
+          const url = next(STRING).token;
+          this.log(`browser get "${url}"`);
+          await dalang.get(url);
           break;
         case "close":
           if (browser.page) {
@@ -208,11 +221,12 @@ class DalangParser extends StringTokeniser {
         break;
       case "include":
         const fn = next(STRING).token;
-        console.log('include ' + fn);
+        this.log(token,`include "${fn}"`);
         await this.run(fn);
         break;
       case "alias":
         alias = { name: next(STRING).token, args: [], tokens: [] };
+        let ln = token.lineno;
         let ob = next(SYMBOL).token;
         if (ob === '(') {
           // consume arguments
@@ -224,73 +238,75 @@ class DalangParser extends StringTokeniser {
         if (ob !== '{') Unexpected(token);
         // consume tokens up to closing '}'
         while (next().token != '}') {
+          token.lineno -= ln;
           alias.tokens.push(token);
         }
         aliases[alias.name] = alias;
+        this.log(token,`alias ${alias.name} ...`);
         break;
       case "test-id": 
         arg = next(STRING).token;
-        console.log(`test-id "${arg}"`);
+        this.log(token,`test-id "${arg}"`);
         await dalang.testid(arg);
         break;
       case "select": 
         arg = next(STRING).token;
-        console.log(`select "${arg}"`);
+        this.log(token,`select "${arg}"`);
         await dalang.select(arg);
         break;
       case "xpath": 
         arg = next(STRING).token;
-        console.log(`xpath "${arg}"`);
+        this.log(token,`xpath "${arg}"`);
         await dalang.xpath(arg);
         break;
 	  case "log":
-        console.log('log');
+        this.log(token,'log');
         await dalang.log(); 
         break;
       case "dump":
-        console.log('dump');
+        this.log(token,'dump');
         await dalang.dump(); 
         break;
       case "info": 
-        console.log('info');
+        this.log(token,'info');
         await dalang.info(); 
         break;
       case "click": 
-        console.log('click');
+        this.log(token,'click');
         await dalang.click(); 
         break;
       case "screenshot": 
         arg = next(STRING).token;
-        console.log(`screenshot "${arg}"`);
+        this.log(token,`screenshot "${arg}"`);
         await dalang.screenshot(arg);
         break;
       case "sleep": 
         arg = next(NUMBER).token;
-        console.log(`sleep ${arg}`);
+        this.log(token,`sleep ${arg}`);
         await dalang.sleep(arg); 
         break;
       case "tag": 
         arg = next(STRING).token;
-        console.log(`tag "${arg}"`);
+        this.log(token,`tag "${arg}"`);
         await dalang.tag(arg);
         break;
       case "at": 
         const x = next(NUMBER).token; 
         next(SYMBOL,',');
         const y = next(NUMBER).token; 
-        console.log(`at ${x},${y}`);
+        this.log(token,`at ${x},${y}`);
         try { await dalang.at(x,y); } catch(e) { throw e; }
         break;
       case "size": 
         const width = next(NUMBER).token; 
         next(SYMBOL,',');
         const height = next(NUMBER).token; 
-        console.log(`size ${width},${height}`);
+        this.log(token,`size ${width},${height}`);
         try { await dalang.size(width,height).catch(e => { throw e }); } catch(e) { throw e; }
         break;
       case "check":
         const text = next(STRING).token;
-        console.log(`check "${text}"`);
+        this.log(token,`check "${text}"`);
         try { await dalang.check(text); } catch(e) { 
           console.error('check failed');
           throw e; 
@@ -298,7 +314,7 @@ class DalangParser extends StringTokeniser {
         break;
       case "wait":
         arg = next(NUMBER).token;
-        console.log(`wait ${arg}`);
+        this.log(token,`wait ${arg}`);
         await dalang.wait(arg);
         break;
       default:
@@ -306,7 +322,7 @@ class DalangParser extends StringTokeniser {
         if (alias === undefined) {
           Unexpected(token);
         } else {
-          console.log(`alias ${token.token}`);
+          this.log(token,`found alias ${token.token}`);
           await this.runAlias(alias);
         }
       }
