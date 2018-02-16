@@ -1,0 +1,69 @@
+
+version
+
+// Include standard aliases
+include "aliases.test"
+
+alias BROWSER_WAIT (seconds) {
+    browser wait $seconds                   /* driver wait time for elements to become available */
+}
+alias BROWSER_WAIT_ON {
+    browser wait 15                         /* default driver wait time for elements to become available */
+}
+alias BROWSER_WAIT_OFF {
+    browser wait 0
+}
+
+// browser settings, create a 640x400 window (400 is minimum width browser will size to)
+browser option "--unlimited-storage"
+
+// disable password save prompts
+browser prefs "credentials_enable_service" false
+browser prefs "password_manager_enabled" false
+
+// start the browser
+browser start
+BROWSER_WAIT_ON
+browser chrome 0,74                     /* height +74 for chrome */
+browser size 400,640                    /* Internal window size */
+
+// set default wait timer
+default wait 5.0
+
+// browser get "http://example.com/"
+// sleep 1000
+browser get "http://10.119.103.2/~adf/RMC2/trunk/client/"
+
+wait 10
+
+test-id "register.label-1" info tag SPAN at 0,0 size 400,33 check "Registration"
+test-id "register.label-2" info tag SPAN at 33,66 size 69,33 check "Company"
+test-id "register.company" info tag INPUT at 166,66 size 200,33 check "99"
+test-id "register.label-3" info tag SPAN at 33,116 size 70,33 check "Operative"
+test-id "register.operative" info tag INPUT at 166,116 size 200,33 check "ABBE01"
+test-id "register.label-4" info tag SPAN at 33,166 size 74,33 check "Username"
+test-id "register.username" info tag INPUT at 166,166 size 200,33 check "adf"
+test-id "register.label-5" info tag SPAN at 33,216 size 71,33 check "Password"
+test-id "register.password" info tag INPUT at 166,216 size 200,33 check "password"
+test-id "register.label-6" info tag SPAN at 33,266 size 49,33 check "Device"
+test-id "register.device" info tag SELECT at 166,266 size 200,33 check "GN"
+test-id "register.register" info tag BUTTON at 116,316 size 166,50 check "Register"
+test-id "register.label-1" info tag SPAN at 0,0 size 400,33 check "Registration"
+test-id "register.label-2" info tag SPAN at 33,66 size 69,33 check "Company"
+test-id "register.company" info tag INPUT at 166,66 size 200,33 check "99"
+test-id "register.label-3" info tag SPAN at 33,116 size 70,33 check "Operative"
+test-id "register.operative" info tag INPUT at 166,116 size 200,33 check "ABBE01"
+test-id "register.label-4" info tag SPAN at 33,166 size 74,33 check "Username"
+test-id "register.username" info tag INPUT at 166,166 size 200,33 check "adf"
+test-id "register.label-5" info tag SPAN at 33,216 size 71,33 check "Password"
+test-id "register.password" info tag INPUT at 166,216 size 200,33 check "password"
+test-id "register.label-6" info tag SPAN at 33,266 size 49,33 check "Device"
+test-id "register.device" info tag SELECT at 166,266 size 200,33 check "GN"
+test-id "register.register" info tag BUTTON at 116,316 size 166,50 check "Register"
+
+screenshot "register.png"
+click
+
+Yes
+
+browser close

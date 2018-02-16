@@ -1,0 +1,6 @@
+
+alias Yes    { select ".rmcAlertDialog .prompt :first-child" click sleep 0.1 }
+alias DEBUG_WAIT { sleep 30000 }
+
+alias "--onfail" { dump log dump screenshot "failure.png" DEBUG_WAIT }
+alias "--onsuccess" { sleep 1 }
