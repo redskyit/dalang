@@ -197,10 +197,10 @@ class Dalang extends State {
     const { page } = this.state;
     const type = 'test-id';
     const els = await page.$$('*[test-id]');
-    els.forEach(async element => {
+    for (let element of els) {
       const selector = await page.evaluate(el => el.getAttribute('test-id'), element);
       await this.info({ type, selector, element });
-    });
+    }
   }
 
   async log() {
