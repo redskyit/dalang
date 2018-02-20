@@ -1,5 +1,6 @@
 const { StringTokeniser } = require('./tokeniser');
 const fs = require('fs');
+const path = require('path');
 
 const { EOF, STRING, NUMBER, SYMBOL } = StringTokeniser;
 
@@ -23,6 +24,10 @@ class DalangParser extends StringTokeniser {
 
   async open(fn) {
     return new Promise((ok,r) => {
+      if (!path.isAbsolute(fn)) {
+        fn = path.normalize(path.join(path.dirname(process.argv[1]), fn));
+      }
+      console.log('PARSER: open: ' + fn);
       fs.readFile(fn, { encoding: "utf8" }, (err, data) => {
         if (err) r(err); 
         else {
@@ -202,7 +207,7 @@ class DalangParser extends StringTokeniser {
             browser.page = await this.start(Object.assign({}, browser.size, { args: this.options }));
           }
           const url = next(STRING).token;
-          this.log(`browser get "${url}"`);
+          this.log(token, `browser get "${url}"`);
           await dalang.get(url);
           break;
         case "close":
@@ -316,6 +321,10 @@ class DalangParser extends StringTokeniser {
         arg = next(NUMBER).token;
         this.log(token,`wait ${arg}`);
         await dalang.wait(arg);
+        break;
+      case "echo":
+        arg = next(STRING).token;
+        this.log(token,`// ${arg}`);
         break;
       default:
         alias = aliases[token.token];
