@@ -30,7 +30,7 @@ class Tokeniser {
     slashStarComments = true,
     slashSlashComments = true,
     whiteSpace = /[ 	\n]/,
-    wordChars = /[A-Za-z0-9$#_\-]/
+    wordChars = /[A-Za-z0-9$#_\-.]/
   } = {}) {
     this.options = { qc: quoteChar, sstc: slashStarComments, sslc: slashSlashComments };
     this.lexicaliser = new Lexicaliser({ whiteSpace, wordChars });
@@ -42,6 +42,11 @@ class Tokeniser {
     return this.lastch;
   }
   next() {
+    if (this.nextToken) { 
+      const nextToken = this.nextToken;
+      this.nextToken = null;
+      return nextToken;
+    }
     const { wordChars, qc, sstc, sslc } = this.options;
     const l = this.lexicaliser;
     let ch = this.nextch === undefined ? this.getch() : this.nextch;
@@ -75,11 +80,14 @@ class Tokeniser {
             nextch = this.getch();
           } else {
             token += nextch;
+            let esc = 0;
             while (ch = this.getch()) {
-              if (ch === qc) {
+              if (esc === 0 && ch === qc) {
                 nextch = this.getch();
                 break;
               }
+              if (esc) esc = 0;
+              else if (ch === '\\') esc = 1;
               token += ch;
             }
           }
@@ -130,6 +138,11 @@ class Tokeniser {
       token = parseFloat(token);
     }
     return { token, type, nextch, lineno: this.lineno };
+  }
+  peek() {
+    const token = this.next();
+    this.nextToken = token;
+    return token;
   }
 }
 
