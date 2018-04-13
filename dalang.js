@@ -351,7 +351,7 @@ class Dalang extends State {
   async tag(name) {
     const Jest = this.jest();
     const info = await this._nodeInfo();
-    Jest.expect(info.nodeName.toLowerCase()).toBe(name);
+    Jest.expect(info.nodeName.toLowerCase()).toBe(name.toLowerCase());
   }
 
   // actions
