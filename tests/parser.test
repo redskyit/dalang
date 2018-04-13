@@ -32,7 +32,7 @@ default wait 5.0
 
 // browser get "http://example.com/"
 // sleep 1000
-browser get "http://10.119.103.2/~adf/RMC2/trunk/client/"
+browser get "http://localhost/~adf/RMC2/trunk/client/"
 
 wait 10
 
@@ -60,6 +60,8 @@ test-id "register.password" info tag INPUT at 166,216 size 200,33 check "passwor
 test-id "register.label-6" info tag SPAN at 33,266 size 49,33 check "Device"
 test-id "register.device" info tag SELECT at 166,266 size 200,33 check "GN"
 test-id "register.register" info tag BUTTON at 116,316 size 166,50 check "Register"
+
+dump
 
 screenshot "register.png"
 click
