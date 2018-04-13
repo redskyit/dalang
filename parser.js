@@ -17,6 +17,7 @@ class DalangParser extends StringTokeniser {
     this.options = [];
     this.prefs = [];
     this.scripts = [];
+    this.waits = [];
     this.state = {};
   }
 
@@ -218,10 +219,12 @@ class DalangParser extends StringTokeniser {
       case "default":
         switch(next(STRING).token) {
         case "wait":
-          console.log(`TODO: default wait ${next(NUMBER).token}`);
+          this.state.defaultWait = next(NUMBER).token;
+          console.log(`default wait ${this.state.defaultWait}`);
           break;
         case "screenshot":
-          console.log(`TODO: default screenshot ${next(STRING).token}`);
+          this.state.defaultScreenshot = next(STRING).token;
+          console.log(`default screenshot ${this.state.defaultScreenshot}`);
           break;
         default:
           Unexpected(token);
@@ -260,6 +263,7 @@ class DalangParser extends StringTokeniser {
           next(SYMBOL, ',');
           size.height = next(NUMBER).token;
           this.log(token,'browser size ' + JSON.stringify(size));
+          await dalang.viewport(size);
           break;
         case "get":
           if (!browser.page) {
@@ -276,7 +280,8 @@ class DalangParser extends StringTokeniser {
           }
           break;
         case "wait":
-          browser.wait = next(NUMBER).token;          // not needed?
+          this.state.browserWait = next(NUMBER).token;
+          this.log(token, `browser wait ${this.state.browserWait}`);
           break;
         default:
           Unexpected(token);
@@ -424,6 +429,32 @@ class DalangParser extends StringTokeniser {
         this.log(token,`${keyword} "${arg}"`);
         await dalang.clear();
         await dalang.send(arg);
+        break;
+      case "push":
+        arg = next(STRING).token;
+        switch (arg) {
+        case "wait":
+          this.log(token, `${keyword} ${arg}`);
+          this.waits.push(dalang.timeout);
+          break;
+        default:
+          this.log(token, `${keyword} ${arg}`);
+          Unexpected(token);
+          break;
+        }
+        break;
+      case "pop":
+        arg = next(STRING).token;
+        switch (arg) {
+        case "wait":
+          this.log(token, `${keyword} ${arg}`);
+          dalang.timeout = this.waits.pop();
+          break;
+        default:
+          this.log(token, `${keyword} ${arg}`);
+          Unexpected(token);
+          break;
+        }
         break;
       default:
         alias = aliases[token.token];

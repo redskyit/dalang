@@ -47,16 +47,18 @@ class Dalang extends State {
 
   async _nodeInfo(element = this.state.element) {
     const { page } = this.state;
-    const info = await page.evaluate(el => ({
-      nodeName: el.nodeName,
-      testid: el.getAttribute('test-id'),
-      textContent: el.textContent,
-      value: el.value,
-      selectedValue: el.selectedValue,
-      displayed: el.style.display !== 'none',
-      enabled: !el.disabled,
-      selected: el.checked,                         // TODO how do we do this in puppeteer?
-    }), element);
+    const info = await page.evaluate(el => {
+      return {
+        nodeName: el.nodeName,
+        testid: el.getAttribute('test-id'),
+        textContent: dalang.getVisibleText(el),                  // TODO sigh, not compatible with selenium
+        value: el.value,
+        selectedValue: el.selectedValue,
+        displayed: el.style.display !== 'none',
+        enabled: !el.disabled,
+        selected: el.checked,                         // TODO how do we do this in puppeteer?
+      };
+    }, element);
     return info;
   }
 
@@ -113,9 +115,18 @@ class Dalang extends State {
     return pages[0];
   }
 
-  viewport({ width, height }) {
-    const { page } = this.state;
-    page.setViewport({ width, height });
+  async viewport({ width, height }) {
+    const { page, browser } = this.state;
+    if (page) {
+      await page.setViewport({ width, height });
+      const { _connection } = browser;
+      const { chrome } = this.__config;
+      height += chrome.y;
+      width += chrome.x;
+      const { targetInfos: [{ targetId }]} = await _connection.send('Target.getTargets');
+      const { windowId } = await _connection.send('Browser.getWindowForTarget', { targetId });
+      await _connection.send('Browser.setWindowBounds', { bounds: { height, width }, windowId });
+    }
   }
 
   async browserInfo() {
@@ -126,8 +137,28 @@ class Dalang extends State {
     return size;
   }
 
+  async _initDalangBrowserAPI() {
+    await this.state.page.evaluate(`
+      window.dalang = {
+        getVisibleText: function(el) {
+          var text = '';
+          for (var i = 0; i < el.childNodes.length; i++) { 
+            var node = el.childNodes[i];
+            if (node.nodeType == 1) {
+              text = text + ' ' + this.getVisibleText(node);
+            } else if (node.nodeType == 3) {
+              text = text + ' ' + node.nodeValue;
+            } 
+          }
+          return text.trim();
+        }
+      };
+    `);
+  }
+
   async get(url) {
     await this.state.page.goto(url);
+    await this._initDalangBrowserAPI();
   }
 
   async close() {
@@ -143,7 +174,7 @@ class Dalang extends State {
   wait(s) {
     this.timeout = (s||this.__config.defaultTimeout) * 1000;
   }
-
+  
   // selectors
 
   /**
@@ -181,16 +212,13 @@ class Dalang extends State {
   async testid(testid) {
     const { page } = this.state;
     const selector = `*[test-id='${testid}']`;
-    console.log('calling waitForSelector ' + selector + ' with timeout ' + this.timeout);
     try {
       await page.waitForSelector(selector, { timeout: this.timeout });
     } catch(e) {
       console.dir(e);
       throw e;
     }
-    console.log('done waitForSelector, get element');
     const element = await page.$(selector);
-    console.log('done get element');
     this.state = { type: "test-id", selector: testid, element };
     return element;
   }
