@@ -28,10 +28,10 @@ class Dalang extends State {
     return VERSION;
   }
 
-  async run(script) {
+  async run(script, cwd) {
     const parser = new Parser(this, { wordChars: /[A-Za-z0-9$#_\-]/ });
-    Jest.test(script, async () => {
-      await parser.run(script).catch(e => {
+    await Jest.test(script, async () => {
+      await parser.run(script, cwd || process.cwd()).catch(e => {
         // handle failure
         console.error(e);
       });
@@ -53,6 +53,9 @@ class Dalang extends State {
       textContent: el.textContent,
       value: el.value,
       selectedValue: el.selectedValue,
+      displayed: el.style.display !== 'none',
+      enabled: !el.disabled,
+      selected: el.checked,                         // TODO how do we do this in puppeteer?
     }), element);
     return info;
   }
@@ -97,6 +100,8 @@ class Dalang extends State {
     args = [].concat(args||[]);
     this.config({ args });
     if (width && height) this.arg(`--window-size=${width+chrome.x},${height+chrome.y}`);
+    args.push('--no-startup-window');
+    args.push('--disable-dev-shm-usage');
     console.dir(args);
     const browser = await puppeteer.launch({ headless, sloMo, args });
     const pages = await browser.pages();
@@ -176,8 +181,16 @@ class Dalang extends State {
   async testid(testid) {
     const { page } = this.state;
     const selector = `*[test-id='${testid}']`;
-    await page.waitForSelector(selector, { timeout: this.timeout });
+    console.log('calling waitForSelector ' + selector + ' with timeout ' + this.timeout);
+    try {
+      await page.waitForSelector(selector, { timeout: this.timeout });
+    } catch(e) {
+      console.dir(e);
+      throw e;
+    }
+    console.log('done waitForSelector, get element');
     const element = await page.$(selector);
+    console.log('done get element');
     this.state = { type: "test-id", selector: testid, element };
     return element;
   }
@@ -189,7 +202,12 @@ class Dalang extends State {
     const box = await this._boundingBox(element);
     const info = await this._nodeInfo(element);
     const value = await this.__getValue(info);
-    console.log(`${type} "${selector}" info tag ${info.nodeName} at ${box.x},${box.y} size ${box.width},${box.height} check "${value}"`);
+    console.log(`${type} "${selector}" info tag ${info.nodeName.toLowerCase()}`
+                + ` ${info.displayed ? '' : 'not '}displayed`
+                + ` at ${box.x},${box.y} size ${box.width},${box.height}`
+                + ` ${info.enabled ? '' : 'not '}enabled`
+                + ` ${info.selected ? '' : 'not '}selected`
+                + ` check "${value}"`);
   }
 
   async dump() {
@@ -205,6 +223,11 @@ class Dalang extends State {
 
   async log() {
     // todo
+    // console.log('TODO: implement browser log dump');
+  }
+
+  async call(name, args) {
+    return await this.state.page.evaluate(`window.RegressionTest.test("${name}", [ ${args.join(',')} ])`);
   }
 
   // The wait timeout.  
@@ -244,7 +267,37 @@ class Dalang extends State {
 
   // checks
 
+  not() {
+    this.state.not = true;
+  }
+
+  jest() {
+    // returns a jest test object that does a not test if not is set.
+    const jest = this.state.not ? Jest.dont() : Jest;
+    this.state.not = false;
+    return jest;
+  }
+
+  async selected() {
+    const Jest = this.jest();
+    const info = await this._nodeInfo();
+    Jest.expect(info.selected).toBe(true);
+  }
+
+  async displayed() {
+    const Jest = this.jest();
+    const info = await this._nodeInfo();
+    Jest.expect(info.displayed).toBe(true);
+  }
+
+  async enabled() {
+    const Jest = this.jest();
+    const info = await this._nodeInfo();
+    Jest.expect(info.enabled).toBe(true)
+  }
+
   async check(check) {
+    const Jest = this.jest();
     try {
       await this.__waitFor(async () => {
         const text = await this.__getValue();
@@ -256,6 +309,7 @@ class Dalang extends State {
   }
 
   async at(x, y) {
+    const Jest = this.jest();
     const { page, element } = this.state;
     try {
       await this.__waitFor(async () => {
@@ -269,12 +323,25 @@ class Dalang extends State {
   }
 
   async size(width, height) {
+    const Jest = this.jest();
     const { page, element } = this.state;
     try {
       await this.__waitFor(async () => {
         const box = await this._boundingBox();
-        Jest.expect(box.width).toBe(width);
-        Jest.expect(box.height).toBe(height);
+        if (width !== '*' && width !== undefined) {
+          if (typeof width === "number") {
+            Jest.expect(box.width).toBe(width);
+          } else {
+            Jest.expect(box.width).toBeInRange(width[0], width[1]);
+          }
+        }
+        if (height !== '*' && height !== undefined) {
+          if (typeof height === "number") {
+            Jest.expect(box.height).toBe(height);
+          } else {
+            Jest.expect(box.width).toBeInRange(width[0], width[1]);
+          }
+        }
       });
     } catch(e) {
       throw e;
@@ -282,11 +349,21 @@ class Dalang extends State {
   }
 
   async tag(name) {
+    const Jest = this.jest();
     const info = await this._nodeInfo();
-    Jest.expect(info.nodeName).toBe(name);
+    Jest.expect(info.nodeName.toLowerCase()).toBe(name);
   }
 
   // actions
+
+  async clear() {
+    const { page, element } = this.state;
+    try {
+      return await page.evaluate(el => el.value = '', element);
+    } catch(e) {
+      throw e;
+    }
+  }
 
   async send(text) {
     try {
@@ -295,6 +372,7 @@ class Dalang extends State {
       throw e;
     }
   }
+
   async click() {
     const { page, element } = this.state;
     return await element.click();
