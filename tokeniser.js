@@ -26,13 +26,13 @@ class Lexicaliser {
 
 class Tokeniser {
   constructor({
-    quoteChar = '"',
+    quoteChars = '"\'',
     slashStarComments = true,
     slashSlashComments = true,
     whiteSpace = /[ 	\n]/,
     wordChars = /[A-Za-z0-9$#_\-.]/
   } = {}) {
-    this.options = { qc: quoteChar, sstc: slashStarComments, sslc: slashSlashComments };
+    this.options = { qc: quoteChars, sstc: slashStarComments, sslc: slashSlashComments };
     this.lexicaliser = new Lexicaliser({ whiteSpace, wordChars });
     this.lineno = 1;
   }
@@ -53,6 +53,7 @@ class Tokeniser {
     let token = this.token = '';
     let nextch = this.nextch = undefined;
     let type = this.type = EOF;
+    let q;
     while (l.type(ch) === SPACE) {			// consume white space
       ch = this.getch();
     }
@@ -68,21 +69,22 @@ class Tokeniser {
         nextch = ch;
         break;
       } else {
-        if (token.length && ch !== qc) {
+        if (token.length && qc.indexOf(ch) === -1) {
           // a symbol terminate an existing token (unless its a quote)
           nextch = ch;
           break;
         }
         nextch = this.getch();
-        if (ch === qc) {			// start of quoted string
+        if (qc.indexOf(ch)>=0) {			// start of quoted string
+          q = ch;
           type = STRING;
-          if (nextch === qc) {
+          if (nextch === q) {
             nextch = this.getch();
           } else {
             token += nextch;
             let esc = 0;
             while (ch = this.getch()) {
-              if (esc === 0 && ch === qc) {
+              if (esc === 0 && ch === q) {
                 nextch = this.getch();
                 break;
               }

@@ -14,11 +14,17 @@ L8	123abc /* is a string */
 	// ignore this line
 	"hello,there"
 	/* hello */
+	'hello,there'
+	hello.there
+	''
+	"'"
+	'"'
+	/* hello */
 `;
 
 test('Tokeniser', () => {
 
-  const tokeniser = new StringTokeniser({ wordChars: /[A-Za-z0-9$#_\-]/ });
+  const tokeniser = new StringTokeniser({ wordChars: /[A-Za-z0-9$#_\-.]/ });
   tokeniser.set(script);
 
   expect(tokeniser.next()).toEqual({ token: 'L2', type: 1, nextch: ' ', lineno: 2 });
@@ -41,5 +47,10 @@ test('Tokeniser', () => {
   expect(tokeniser.next()).toEqual({ token: 'abc123', type: 1, nextch: ' ', lineno: 9 });
   expect(tokeniser.next()).toEqual({ token: 'abc-123', type: 1, nextch: ' ', lineno: 10 });
   expect(tokeniser.next()).toEqual({ token: 'hello,there', type: 1, nextch: '\n', lineno: 12 });
-  expect(tokeniser.next()).toEqual({ token: '', type: -1, nextch: undefined, lineno: 14 });
+  expect(tokeniser.next()).toEqual({ token: 'hello,there', type: 1, nextch: '\n', lineno: 14 });
+  expect(tokeniser.next()).toEqual({ token: 'hello.there', type: 1, nextch: '\n', lineno: 15 });
+  expect(tokeniser.next()).toEqual({ token: '', type: 1, nextch: '\n', lineno: 16 });
+  expect(tokeniser.next()).toEqual({ token: "'", type: 1, nextch: '\n', lineno: 17 });		// quoted = string
+  expect(tokeniser.next()).toEqual({ token: '"', type: 1, nextch: '\n', lineno: 18 });		// quoted = string
+  expect(tokeniser.next()).toEqual({ token: '', type: -1, nextch: undefined, lineno: 20 });
 });
