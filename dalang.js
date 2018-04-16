@@ -28,10 +28,10 @@ class Dalang extends State {
     return VERSION;
   }
 
-  async run(script, cwd) {
+  async run(script, config) {
     const parser = new Parser(this, { wordChars: /[A-Za-z0-9$#_\-]/ });
     await Jest.test(script, async () => {
-      await parser.run(script, cwd || process.cwd()).catch(e => {
+      await parser.run(script, config.cwd || process.cwd()).catch(e => {
         // handle failure
         console.error(e);
       });
@@ -48,27 +48,31 @@ class Dalang extends State {
   async _nodeInfo(element = this.state.element) {
     const { page } = this.state;
     const info = await page.evaluate(el => {
-      return {
-        nodeName: el.nodeName,
+      const info = {
+        nodeName: el.nodeName.toLowerCase(),
         testid: el.getAttribute('test-id'),
-        textContent: dalang.getVisibleText(el),                  // TODO sigh, not compatible with selenium
         value: el.value,
         selectedValue: el.selectedValue,
-        displayed: el.style.display !== 'none',
+        displayed: dalang.isShown(el),           // was el.style.display !== 'none',
         enabled: !el.disabled,
         selected: el.checked,                         // TODO how do we do this in puppeteer?
       };
+      info.textContent = info.displayed ? dalang.getVisibleText(el) : "";
+      return info;
     }, element);
     return info;
   }
 
   async _boundingBox(element = this.state.element) {
     const box = await element.boundingBox();
-    box.x = Math.round(box.x,0);
-    box.y = Math.round(box.y,0);
-    box.width = Math.round(box.width,0);
-    box.height = Math.round(box.height,0);
-    return box;
+    if (box) {
+      box.x = Math.round(box.x,0);
+      box.y = Math.round(box.y,0);
+      box.width = Math.round(box.width,0);
+      box.height = Math.round(box.height,0);
+      return box;
+    }
+    return { x: 0, y: 0, width: 0, height: 0 };
   }
 
   // test interface
@@ -147,13 +151,35 @@ class Dalang extends State {
             if (node.nodeType == 1) {
               s = this.getVisibleText(node);
             } else if (node.nodeType == 3) {
-              s = node.textContent.replace(String.fromCharCode(160),' ');
+              s = node.textContent;
             } else {
               s = '';
             }
             if (s) text = (text && text.trim() + ' ') + s;
           }
-          return text;
+          return text.replace(String.fromCharCode(160),' ');
+        },
+        _parentsDisplayed: function (el) {
+          if (el = el.parentElement) {
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none') return false;
+            return this._parentsDisplayed(el);
+          }
+          return true;
+        },
+        // https://github.com/SeleniumHQ/selenium/blob/e09e28f016c9f53196cf68d6f71991c5af4a35d4/javascript/atoms/dom.js#L437
+        // Attempting to emulate as closely as necessary the isShown function in selenium
+        isShown: function(el) {
+          if (el.nodeName === "BODY") return true;                                          // BODY always shown
+          if (el.nodeName === "INPUT" && el.type.toLowerCase() === "hidden") return false;  // hidden input fields are hidden
+          if (el.nodeName === "NOSCRIPT") return false;                                     // noscript element is hidden
+          const style = window.getComputedStyle(el);
+          if (style.visibility === 'invisible' || style.visibility === 'collapsed') return false;  // invisible is hidden
+          if (style.display === 'none') return false;                                       // display none is hidden
+          if (!this._parentsDisplayed(el)) return false;                                    // parents are display none
+          if (style.opacity == 0) return false;                                             // opacity 0 is hidden
+          if (el.offsetWidth == 0 || el.offsetHeight == 0) return false;                    // not positive size is hidden
+          return true;
         }
       };
     `);
@@ -233,7 +259,7 @@ class Dalang extends State {
     const box = await this._boundingBox(element);
     const info = await this._nodeInfo(element);
     const value = await this.__getValue(info);
-    console.log(`${type} "${selector}" info tag ${info.nodeName.toLowerCase()}`
+    console.log(`${type} "${selector}" info tag ${info.nodeName}`
                 + ` ${info.displayed ? '' : 'not '}displayed`
                 + ` at ${box.x},${box.y} size ${box.width},${box.height}`
                 + ` ${info.enabled ? '' : 'not '}enabled`
@@ -293,7 +319,7 @@ class Dalang extends State {
 
   async __getValue(info) {
       const { nodeName, value, selectedValue, textContent } = info || await this._nodeInfo();
-      return nodeName === 'INPUT' || nodeName === 'SELECT' ? value : textContent;
+      return nodeName === 'input' || nodeName === 'select' || nodeName === 'textarea' ? value : textContent;
   }
 
   // checks
@@ -345,8 +371,20 @@ class Dalang extends State {
     try {
       await this.__waitFor(async () => {
         const box = await this._boundingBox();
-        Jest.expect(box.x).toBe(x);
-        Jest.expect(box.y).toBe(y);
+        if (x !== '*' && x !== undefined) {
+          if (typeof x === "number") {
+            Jest.expect(box.x).toBe(x);
+          } else {
+            Jest.expect(box.x).toBeInRange(x[0], x[1]);
+          }
+        }
+        if (y !== '*' && y !== undefined) {
+          if (typeof y === "number") {
+            Jest.expect(box.y).toBe(y);
+          } else {
+            Jest.expect(box.y).toBeInRange(y[0], y[1]);
+          }
+        }
       });
     } catch(e) {
       throw e;
@@ -382,7 +420,7 @@ class Dalang extends State {
   async tag(name) {
     const Jest = this.jest();
     const info = await this._nodeInfo();
-    Jest.expect(info.nodeName.toLowerCase()).toBe(name.toLowerCase());
+    Jest.expect(info.nodeName).toBe(name.toLowerCase());
   }
 
   // actions
