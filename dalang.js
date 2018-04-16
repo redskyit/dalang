@@ -141,16 +141,19 @@ class Dalang extends State {
     await this.state.page.evaluate(`
       window.dalang = {
         getVisibleText: function(el) {
-          var text = '';
+          var text = '', s;
           for (var i = 0; i < el.childNodes.length; i++) { 
             var node = el.childNodes[i];
             if (node.nodeType == 1) {
-              text = text + ' ' + this.getVisibleText(node);
+              s = this.getVisibleText(node);
             } else if (node.nodeType == 3) {
-              text = text + ' ' + node.nodeValue;
-            } 
+              s = node.textContent.replace(String.fromCharCode(160),' ');
+            } else {
+              s = '';
+            }
+            if (s) text = (text && text.trim() + ' ') + s;
           }
-          return text.trim();
+          return text;
         }
       };
     `);
