@@ -145,9 +145,9 @@ class Dalang extends State {
     await this.state.page.evaluate(`
       window.dalang = {
         getVisibleText: function(el) {
-          var text = '', s;
-          for (var i = 0; i < el.childNodes.length; i++) { 
-            var node = el.childNodes[i];
+          var text = '', s, cns = el.childNodes;
+          for (var i = 0; i < cns.length; i++) { 
+            var node = cns[i];
             if (node.nodeType == 1) {
               s = this.getVisibleText(node);
             } else if (node.nodeType == 3) {
@@ -155,7 +155,7 @@ class Dalang extends State {
             } else {
               s = '';
             }
-            if (s) text = (text && text.trim() + ' ') + s;
+            if (s) text = (text && text + ' ') + s.replace(/^[ ]+|[ ]+$/,'');   // trim only soft space
           }
           return text.replace(String.fromCharCode(160),' ');
         },
@@ -337,20 +337,38 @@ class Dalang extends State {
 
   async selected() {
     const Jest = this.jest();
-    const info = await this._nodeInfo();
-    Jest.expect(info.selected).toBe(true);
+    try {
+      await this.__waitFor(async () => {
+        const info = await this._nodeInfo();
+        Jest.expect(info.selected).toBe(true);
+      });
+    } catch(e) {
+      throw e;
+    }
   }
 
   async displayed() {
     const Jest = this.jest();
-    const info = await this._nodeInfo();
-    Jest.expect(info.displayed).toBe(true);
+    try {
+      await this.__waitFor(async () => {
+        const info = await this._nodeInfo();
+        Jest.expect(info.displayed).toBe(true);
+      });
+    } catch(e) {
+      throw e;
+    }
   }
 
   async enabled() {
     const Jest = this.jest();
-    const info = await this._nodeInfo();
-    Jest.expect(info.enabled).toBe(true)
+    try {
+      await this.__waitFor(async () => {
+        const info = await this._nodeInfo();
+        Jest.expect(info.enabled).toBe(true)
+      });
+    } catch(e) {
+      throw e;
+    }
   }
 
   async check(check) {

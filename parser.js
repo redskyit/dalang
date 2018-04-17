@@ -2,6 +2,7 @@ const { StringTokeniser } = require('./tokeniser');
 const fs = require('fs');
 const path = require('path');
 const T = require('./truthy');
+const { spawn } = require('child_process');
 
 const { EOF, STRING, NUMBER, SYMBOL } = StringTokeniser;
 
@@ -22,7 +23,7 @@ class DalangParser extends StringTokeniser {
   }
 
   log(token, message) {
-    console.log(`[${this.scripts[this.scripts.length-1]},${token.lineno}] ${message}`);
+    console.log(`[${this.scripts[this.scripts.length-1]},${token.lineno}] ${this.state.skip ? '// ' : ''}${message}`);
   }
 
   async open(fn, cwd) {
@@ -50,7 +51,7 @@ class DalangParser extends StringTokeniser {
       // console.log('run: ', token);
       // Parse this token
       try {
-        next = await this.parseToken(token, tokeniser, dirname);
+        next = await this.parseToken(token, tokeniser, { cwd: dirname });
       } catch(e) {
         this.exception = e;
       }
@@ -58,8 +59,9 @@ class DalangParser extends StringTokeniser {
       // If there was an exception then display test failure
       if (this.exception) {
         token = this.exceptionToken || token;
+        this.exceptionToken = null;
         console.error('');
-        console.error(`--- Test Script Failure --- at line ${token.lineno} in ${script}`);
+        console.error(`--- Test Script Failure --- at line ${token.lineno} in ${script} [${token.token}]`);
         console.error(this.exception);
         console.error(`--- Test Script Failure --- at line ${token.lineno} in ${script}`);
         console.error('');
@@ -84,16 +86,23 @@ class DalangParser extends StringTokeniser {
     this.scripts.pop();
   }
 
-  async runTokens(tokens) {
+  async runTokens(tokens, vars) {
 
     // tokeniser that returns tokens from an array
     const tokeniser = (function(tokens) {
       let i = 0;
+      function get() {
+          return i == tokens.length ? { token: "", type: EOF } : tokens[i];
+      }
       return {
         next() {
-          const token = i == tokens.length ? { token: "", type: EOF } : tokens[i++];
+          const token = get();
+          if (token.type !== EOF) i++;
           // console.log('runTokens: tokeniser ', token);
           return token;
+        },
+        peek() {
+          return get();
         }
       }
     })(tokens);
@@ -102,20 +111,50 @@ class DalangParser extends StringTokeniser {
     let next;
     while (token.type !== EOF) {
       try {
-        next = await this.parseToken(token, tokeniser);
+        next = await this.parseToken(token, tokeniser, { vars: vars });
       } catch(e) {
         this.exception = e;
         this.exceptionToken = token;
-        break;
+        throw e;
       }
       token = next ? next : tokeniser.next();
     }
   }
 
-  async runAlias(alias) {
+  async runAlias(alias, args) {
     this.scripts.push(alias.name);
-    await this.runTokens(alias.tokens);
+    await this.runTokens(alias.tokens, args);
     this.scripts.pop();
+  }
+
+  async exec(token, cmd, cwd) {
+
+    // normalise path to command
+    if (!path.isAbsolute(cmd.name)) {
+      cmd.name = path.normalize(path.join(cwd, cmd.name));
+    }
+    this.log(token, `> ${cmd.name} ${cmd.args.join(' ')}`);
+
+    return new Promise((ok,r) => {
+      const proc = spawn(cmd.name, cmd.args, { cwd: cwd });
+      let l = {};
+      function out(n,d) {
+        const lines = d.toString().split('\n');
+        if (l[n]) lines[0] = l[n] + lines[0];
+        l[n] = lines.pop();
+        lines.map(line => console.log(`${n}> ${line}`));
+      }
+      proc.stdout.on('data', (data) => out('stdout',data));
+      proc.stderr.on('data', (data) => out('stderr',data));
+      proc.on('close', (code) => {
+        if (code !== 0) {
+          this.log(token, `process exited with code ${code}`);
+          r(code);
+        } else {
+          ok();
+        }
+      });
+    });
   }
 
   async start(options) {
@@ -127,11 +166,14 @@ class DalangParser extends StringTokeniser {
     return page;
   }
 
-  async parseToken(token, tokeniser, cwd) {
-    const { dalang, aliases } = this;
-    let arg, alias, nextToken, fn, call, initial, statement;
+  async parseToken(token, tokeniser, opts) {
+    const { dalang, aliases, state } = this;
+    const { skip } = state;
+    const { vars, cwd } = opts;
+    let arg, alias, nextToken, fn, call, exec, initial, statement, u;
 
-    if (this.state.autoLog) {
+    // if automatice logging is enabled, then copy browser log to output
+    if (state.autoLog) {
       await dalang.log(); 
     }
 
@@ -143,28 +185,35 @@ class DalangParser extends StringTokeniser {
         this.exceptionToken = token;
         throw new Error('Unexpected end of file');
       }
-      if (type !== undefined && token.type !== type) {
+      if (type !== u && token.type !== type) {
         this.exceptionToken = token;
         throw new Error(`TypeError: ${token.token} should be type ${type} but is type ${token.type}`);
       }
-      if (expect !== undefined && expect.indexOf(token.token) === -1) {
+      if (expect !== u && expect.indexOf(token.token) === -1) {
         this.exceptionToken = token;
         throw new Error(`UnexpectedToken: got ${token.token} expected ${expect}`);
+      }
+      if (vars) {
+        // console.log('TODO: expand vars in token');
       }
       return token;
     }
 
+    // report unexpected token
     const Unexpected = (token) => {
       this.exceptionToken = token;
       throw new Error(`Unexpected token '${token.token}' at line ${token.lineno}`);
     }
 
+    // consume an argument list, for example (a b c) or { a b c }
     const consume = (delim, offset) => {
       const arr = [];
-      if (token.type === 2) {
-        if (token.token === delim[0]) {
+      const nextToken = tokeniser.peek();
+      if (nextToken.type === 2) {
+        if (nextToken.token === delim[0]) {
           let nested = 0;
-          next();
+          next();   // consume peeked delim
+          next();   // get first argument or close delim
           while ((nested > 0 && token.type !== EOF) || token.token !== delim[1]) {
             if (token.type === 2) {
               if (token.token === delim[0]) {
@@ -173,11 +222,10 @@ class DalangParser extends StringTokeniser {
                 nested --;
               }
             }
-            token.lineno -= offset;
+            token.lineno -= (offset - 1);
             arr.push(token);
             next();
           }
-          next(undefined, undefined, false);    // get next token, could be EOF don't throw
         }
       }
       return arr;
@@ -209,6 +257,15 @@ class DalangParser extends StringTokeniser {
       return ab;
     };
 
+    const condition = (state, e) => {
+      const { inif } = this.state;
+      if (inif) {
+        inif.result = state;
+      } else {
+        if (!state && e) throw e;
+      }
+    };
+
     // Parse token based on type
     switch (token.type) {
     case STRING:
@@ -221,12 +278,12 @@ class DalangParser extends StringTokeniser {
       case "default":
         switch(next(STRING).token) {
         case "wait":
-          this.state.defaultWait = next(NUMBER).token;
-          this.log(initial, `${statement} wait ${this.state.defaultWait}`);
+          state.defaultWait = next(NUMBER).token;
+          this.log(initial, `${statement} wait ${state.defaultWait}`);
           break;
         case "screenshot":
-          this.state.defaultScreenshot = next(STRING).token;
-          this.log(initial, `${statement} screenshot ${this.state.defaultScreenshot}`);
+          state.defaultScreenshot = next(STRING).token;
+          this.log(initial, `${statement} screenshot ${state.defaultScreenshot}`);
           break;
         default:
           Unexpected(token);
@@ -282,8 +339,8 @@ class DalangParser extends StringTokeniser {
           }
           break;
         case "wait":
-          this.state.browserWait = next(NUMBER).token;
-          this.log(initial, `${statement} wait ${this.state.browserWait}`);
+          state.browserWait = next(NUMBER).token;
+          this.log(initial, `${statement} wait ${state.browserWait}`);
           break;
         default:
           Unexpected(token);
@@ -293,7 +350,7 @@ class DalangParser extends StringTokeniser {
       case "include":
         fn = next(STRING).token;
         this.log(initial,`${statement} "${fn}"`);
-        await this.run(fn, cwd);
+        if (!skip) await this.run(fn, cwd);
         break;
       case "call":
         call = { name: next(STRING).token };
@@ -301,40 +358,59 @@ class DalangParser extends StringTokeniser {
         case "setOption": call.name = "theApp." + call.name; break;
         case "checkGlobals": call.name = "app." + call.name; break;
         }
-        next(undefined, undefined, false);    // get next token, could be EOF don't throw
         call.args = consume('{}', token.lineno).map(arg => arg.type == NUMBER ? arg.token :  "'" + arg.token + "'");
-        nextToken = token;
         this.log(initial, `${statement} ${call.name} { ${call.args.join(',')} }`);
-        try {
-          await dalang.call(call.name, call.args);
-        } catch(e) {
-          console.dir(e);
+        if (!skip) {
+          try {
+            await dalang.call(call.name, call.args);
+          } catch(e) {
+            console.dir(e);
+          }
         }
         break;
       case "alias":
         initial = token;
         alias = { name: next(STRING).token };
-        next(undefined, undefined, false);    // get next token, could be EOF don't throw
         alias.args = consume('()', token.lineno);           // consume arguments
         alias.tokens = consume('{}', token.lineno);         // consume body
-        nextToken = token;
-        aliases[alias.name] = alias;
         this.log(initial,`${statement} ${alias.name} (${alias.args.join(',')}) { ... }`);
+        if (!skip) aliases[alias.name] = alias;
         break;
       case "test-id": case "field":
         arg = next(STRING).token;
         this.log(initial,`${statement} "${arg}"`);
-        await dalang.testid(arg);
+        if (!skip) {
+          try {
+            await dalang.testid(arg);
+            condition(true);
+          } catch (e) {
+            condition(false, e);
+          }
+        }
         break;
       case "select": 
         arg = next(STRING).token;
         this.log(initial,`${statement} "${arg}"`);
-        await dalang.select(arg);
+        if (!skip) {
+          try {
+            await dalang.select(arg);
+            condition(true);
+          } catch(e) {
+            condition(false, e);
+          }
+        }
         break;
       case "xpath": 
         arg = next(STRING).token;
         this.log(initial,`${statement} "${arg}"`);
-        await dalang.xpath(arg);
+        if (!skip) {
+          try {
+            await dalang.xpath(arg);
+            condition(true);
+          } catch(e) {
+            condition(false, e);
+          }
+        }
         break;
       case "log":
         arg = next(STRING).token;
@@ -342,11 +418,11 @@ class DalangParser extends StringTokeniser {
         case "auto":
           arg = next(STRING).token;
           this.log(initial,`${statement} auto ${arg}`);
-          this.state.autoLog = T(arg);
+          if (!skip) state.autoLog = T(arg);
           break;
         case "dump":
           this.log(initial,`${statement} dump`);
-          await dalang.log(); 
+          if (!skip) await dalang.log(); 
           break;
         default:
           Unexpected(token);
@@ -355,88 +431,161 @@ class DalangParser extends StringTokeniser {
         break;
       case "dump":
         this.log(initial,statement);
-        await dalang.dump(); 
+        if (!skip) await dalang.dump(); 
         break;
       case "info": 
         this.log(initial,statement);
-        await dalang.info(); 
+        if (!skip) await dalang.info(); 
         break;
       case "click": 
         this.log(initial,statement);
-        await dalang.click(); 
+        if (!skip) {
+          try {
+            await dalang.click(); 
+            condition(true);
+          } catch(e) {
+            condition(false,e);
+          }
+        }
         break;
       case "screenshot": 
         arg = next(STRING).token;
         this.log(initial,`${statement} "${arg}"`);
-        await dalang.screenshot(arg);
+        if (!skip) await dalang.screenshot(arg);
         break;
       case "sleep": 
         arg = next(NUMBER).token;
         this.log(initial,`${statement} ${arg}`);
-        await dalang.sleep(arg); 
+        if (!skip) await dalang.sleep(arg); 
         break;
       case "tag": 
         arg = next(STRING).token;
         this.log(initial,`${statement} "${arg}"`);
-        await dalang.tag(arg);
+        if (!skip) {
+          try {
+            await dalang.tag(arg);
+            condition(true);
+          } catch(e) {
+            condition(false,e);
+          }
+        }
         break;
       case "not":
         this.log(initial,statement);
-        await dalang.not();
+        if (!skip) await dalang.not();
         break;
       case "displayed":
         this.log(initial,statement);
-        await dalang.displayed();
+        if (!skip) {
+          try {
+            await dalang.displayed();
+            condition(true);
+          } catch(e) {
+            condition(false,e);
+          }
+        }
         break;
       case "enabled":
         this.log(initial,statement);
-        await dalang.enabled();
+        if (!skip) {
+          try {
+            await dalang.enabled();
+            condition(true);
+          } catch(e) {
+            condition(false,e);
+          }
+        }
         break;
       case "selected":
         this.log(initial,statement);
-        await dalang.selected();
+        if (!skip) {
+          try {
+            await dalang.selected();
+            condition(true);
+          } catch(e) {
+            condition(false,e);
+          }
+        }
         break;
       case "at": 
         const { a: x, b: y } = parseAB();
         this.log(initial,`${statement} ${x},${y}`);
-        try { await dalang.at(x,y); } catch(e) { throw e; }
+        if (!skip) {
+          try { 
+            await dalang.at(x,y);
+            condition(true);
+          } catch(e) {
+            condition(false,e);
+          }
+        }
         break;
       case "size": 
         const { a: width, b: height } = parseAB();
         this.log(initial,`${statement} ${typeof width === "object" ? width.join(':') : width},${typeof height === "object" ? height.join(':') : height }`);
-        try { await dalang.size(width,height).catch(e => { throw e }); } catch(e) { throw e; }
+        if (!skip) {
+          try {
+            await dalang.size(width,height);
+            condition(true);
+          } catch(e) {
+            condition(false,e);
+          }
+        }
         break;
       case "check":
-        const text = next(STRING).token;
-        this.log(initial,`${statement} "${text}"`);
-        console.log('CHECK');
-        try { await dalang.check(text); } catch(e) { 
-          console.dir(e);
-          console.error('check failed');
-          throw e; 
+        arg = next(STRING).token;
+        this.log(initial,`${statement} "${arg}"`);
+        if (!skip) {
+          try {
+            await dalang.check(arg);
+            condition(true);
+          } catch(e) { 
+            condition(false,e);
+          }
+        }
+        break;
+      case "checksum":
+        arg = next(STRING).token;
+        this.log(initial,`${statement} "${arg}"`);
+        if (!skip) {
+          try {
+            this.log(initial, '// TODO: implement checksum');
+            condition(true);
+          } catch(e) {
+            condition(false,e);
+          }
         }
         break;
       case "wait":
         arg = next(NUMBER).token;
         this.log(initial,`${statement} ${arg}`);
-        await dalang.wait(arg);
+        if (!skip) await dalang.wait(arg);
         break;
       case "echo":
         arg = next(STRING).token;
-        this.log(initial,`// ${arg}`);
+        if (!skip) this.log(initial,`// ${arg}`);
+        else this.log(initial,`${keyword} "$arg"`);
         break;
       case "set":
         arg = next(STRING).token;
         this.log(initial,`${statement} "${arg}"`);
-        await dalang.clear();
-        await dalang.send(arg);
+        if (!skip) {
+          await dalang.clear();
+          await dalang.send(arg);
+        }
+        break;
+      case "send":
+        arg = next(STRING).token;
+        this.log(initial,`${statement} "${arg}"`);
+        if (!skip) {
+          await dalang.send(arg);
+        }
         break;
       case "push":
         arg = next(STRING).token;
         switch (arg) {
         case "wait":
           this.log(initial, `${statement} ${arg}`);
-          this.waits.push(dalang.timeout);
+          if (!skip) this.waits.push(dalang.timeout);
           break;
         default:
           this.log(initial, `${statement} ${arg}`);
@@ -449,7 +598,7 @@ class DalangParser extends StringTokeniser {
         switch (arg) {
         case "wait":
           this.log(initial, `${statement} ${arg}`);
-          dalang.timeout = this.waits.pop();
+          if (!skip) dalang.timeout = this.waits.pop();
           break;
         default:
           this.log(initial, `${statement} ${arg}`);
@@ -457,13 +606,53 @@ class DalangParser extends StringTokeniser {
           break;
         }
         break;
+      case "exec":
+        initial = token;
+        exec = { name: next(STRING).token };
+        exec.args = consume('()', token.lineno);           // consume arguments (...)
+        if (!exec.args.length) {
+          exec.args = consume('{}', token.lineno);         // consume arguments {...} (old style)
+        }
+        exec.args = exec.args.map(arg => arg.token);
+        this.log(initial,`${statement} ${exec.name} (${exec.args.join(' ')})`);
+        if (!skip) {
+          try {
+            await this.exec(initial, exec, cwd);
+            condition(true);
+          } catch(e) {
+            condition(false,e);
+          }
+        }
+        break;
+      case "if":
+        this.log(initial,`${statement}`);
+        state.inif = {};
+        state.skip = false;
+        break;
+      case "then":
+        this.log(initial,`${statement}`);
+        if (!state.inif) Unexpected(initial);
+        if (!state.inif.result) state.skip = true;
+        break;
+      case "endif":
+        state.skip = false;
+        state.inif = null;
+        this.log(initial,`${statement}`);
+        break;
+      case "fail":
+        arg = next(STRING).token;
+        this.log(initial,`${statement} "${arg}"`);
+        if (!skip) throw arg;
+        break;
       default:
         alias = aliases[statement];
         if (alias === undefined) {
           Unexpected(token);
         } else {
           this.log(initial,statement);
-          await this.runAlias(alias);
+          arg = {};
+          alias.args.forEach(name => arg[name] = next());          // pick up any arguments
+          if (!skip) await this.runAlias(alias, arg);
         }
       }
       break;
