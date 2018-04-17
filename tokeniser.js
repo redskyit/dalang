@@ -142,6 +142,7 @@ class Tokeniser {
     return { token, type, nextch, lineno: this.lineno };
   }
   peek() {
+    if (this.nextToken) return this.nextToken;
     const token = this.next();
     this.nextToken = token;
     return token;
