@@ -280,11 +280,6 @@ class Dalang extends State {
     }
   }
 
-  async log() {
-    // todo
-    // console.log('TODO: implement browser log dump');
-  }
-
   async call(name, args) {
     return await this.state.page.evaluate(`window.RegressionTest.test("${name}", [ ${args.join(',')} ])`);
   }
