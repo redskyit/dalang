@@ -20,6 +20,7 @@ class DalangParser extends StringTokeniser {
     this.scripts = [];
     this.waits = [];
     this.state = {};
+    this.console = [];
   }
 
   log(token, message) {
@@ -72,15 +73,15 @@ class DalangParser extends StringTokeniser {
     if (this.exception) {
       const onfail = this.aliases["--onfail"];
       if (onfail) await this.runAlias(onfail);
+      await this.stop();
       throw this.exception;
     } else {
       const onsuccess = this.aliases["--onsuccess"];
       if (this.scripts.length == 1) {
         if (onsuccess) {
           await this.runAlias(onsuccess);
-        } else {
-          await this.dalang.close();
         }
+        await this.stop();
       }
     }
     this.scripts.pop();
@@ -161,9 +162,29 @@ class DalangParser extends StringTokeniser {
     const { dalang, page } = this;
     if (!page) {
       // need to start browser
-      return this.page = await dalang.start(options);
+      this.page = await dalang.start(options);
+      this.captureConsole();
+      return page;
     }
     return page;
+  }
+
+  async stop() {
+    await this.dalang.close();
+  }
+
+  async captureConsole() {
+    const { page } = this;
+    page.on('console', msg => {
+      this.console.push(msg);
+    });
+  }
+
+  async dumpConsole() {
+    this.console.map(msg => {
+      console.log(msg.text());
+    });
+    this.console = [];
   }
 
   async parseToken(token, tokeniser, opts) {
@@ -174,7 +195,7 @@ class DalangParser extends StringTokeniser {
 
     // if automatice logging is enabled, then copy browser log to output
     if (state.autoLog) {
-      await dalang.log(); 
+      this.dumpConsole();
     }
 
     // get the next token, throw unexpected EOF error if hit EOF
@@ -548,7 +569,7 @@ class DalangParser extends StringTokeniser {
         this.log(initial,`${statement} "${arg}"`);
         if (!skip) {
           try {
-            this.log(initial, '// TODO: implement checksum');
+            dalang.checksum(arg);
             condition(true);
           } catch(e) {
             condition(false,e);
