@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const crc32 = require('crc').crc32;
 const State = require('./state');
 const Jest = require('./minijest');
 const Parser = require('./parser');
@@ -28,7 +29,7 @@ class Dalang extends State {
     return VERSION;
   }
 
-  async run(script, config) {
+  async run(script, config = {}) {
     const parser = new Parser(this, { wordChars: /[A-Za-z0-9$#_\-]/ });
     await Jest.test(script, async () => {
       await parser.run(script, config.cwd || process.cwd()).catch(e => {
@@ -264,7 +265,8 @@ class Dalang extends State {
                 + ` at ${box.x},${box.y} size ${box.width},${box.height}`
                 + ` ${info.enabled ? '' : 'not '}enabled`
                 + ` ${info.selected ? '' : 'not '}selected`
-                + ` check "${value}"`);
+                + (value.indexOf('\n') == -1 ? ` check "${value}"` : ` checksum "crc32:${crc32(value).toString(10)}"`)
+              );
   }
 
   async dump() {
@@ -377,6 +379,22 @@ class Dalang extends State {
       await this.__waitFor(async () => {
         const text = await this.__getValue();
         Jest.expect(text).toBe(check);
+      });
+    } catch(e) {
+      throw e;
+    }
+  }
+
+  async checksum(sum) {
+    const Jest = this.jest();
+    try {
+      await this.__waitFor(async () => {
+        const text = await this.__getValue();
+        if (sum.startsWith('crc32:')) {
+          Jest.expect('crc32:'+crc32(text).toString(10)).toBe(sum);
+        } else {
+          throw new Error('Unknown checksum type');
+        }
       });
     } catch(e) {
       throw e;
