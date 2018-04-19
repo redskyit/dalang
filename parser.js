@@ -21,10 +21,12 @@ class DalangParser extends StringTokeniser {
     this.waits = [];
     this.state = {};
     this.console = [];
+    this.epoch = Date.now();
   }
 
   log(token, message) {
-    console.log(`[${this.scripts[this.scripts.length-1]},${token.lineno}] ${this.state.skip ? '// ' : ''}${message}`);
+    const s = ((Date.now()-this.epoch)/1000).toLocaleString('en-GB', { minimumIntegerDigits: 2, minimumFractionDigits: 3 });
+    console.log(`${s} [${this.scripts[this.scripts.length-1]},${token.lineno}] ${this.state.skip ? '// ' : ''}${message}`);
   }
 
   async open(fn, cwd) {
@@ -89,17 +91,60 @@ class DalangParser extends StringTokeniser {
 
   async runTokens(tokens, vars) {
 
-    // tokeniser that returns tokens from an array
+    // tokeniser that returns tokens from an array, expanding vars if necessary
     const tokeniser = (function(tokens) {
       let i = 0;
-      function get() {
-          return i == tokens.length ? { token: "", type: EOF } : tokens[i];
-      }
+      const expand = (token) => {
+        let s = token.token;
+        // Expand $name variables
+        let a = s.match(/\$[a-z][a-zA-Z0-9]*/g);
+        if (a) {
+          a.forEach(match => {
+            if (match === s) {
+              // token is just $name, replace token with arg
+              const v = vars[match.substr(1)];
+              s = v.token;
+              token.type = v.type;
+            } else {
+              // part of larger string
+              s = s.replace(match, vars[match.substr(1)]);
+              token.type = STRING;
+            }
+          });
+          token.token = s;
+        }
+        // Expand $I(name) and $(name) variables
+        if (token.type === STRING) {
+          a = s.match(/\$[I]*\([^) ]*\)/g);
+          if (a) {
+            a.forEach(match => {
+              const a = match.split(/[()]/);
+              value = vars[a[1]];
+              if (a[0][1] === 'I') value = value|0;
+              if (match === s) {
+                // token is just the variable, token becomes the variable type
+                s = v.token;
+                token.type = v.type;
+              } else {
+                s = s.replace(match, value);
+                token.type = STRING;
+              }
+            });
+            token.token = s;
+          }
+        }
+      };
+      const get = () => {
+          const token = i == tokens.length ? { token: "", type: EOF } : Object.assign({}, tokens[i]);
+          if (vars && token.type === STRING) {
+            expand(token);
+          }
+          return token;
+      };
       return {
         next() {
           const token = get();
           if (token.type !== EOF) i++;
-          // console.log('runTokens: tokeniser ', token);
           return token;
         },
         peek() {
@@ -112,7 +157,7 @@ class DalangParser extends StringTokeniser {
     let next;
     while (token.type !== EOF) {
       try {
-        next = await this.parseToken(token, tokeniser, { vars: vars });
+        next = await this.parseToken(token, tokeniser);
       } catch(e) {
         this.exception = e;
         this.exceptionToken = token;
@@ -190,7 +235,7 @@ class DalangParser extends StringTokeniser {
   async parseToken(token, tokeniser, opts) {
     const { dalang, aliases, state } = this;
     const { skip } = state;
-    const { vars, cwd } = opts;
+    const { cwd } = opts || {};
     let arg, alias, nextToken, fn, call, exec, initial, statement, u;
 
     // if automatice logging is enabled, then copy browser log to output
@@ -213,9 +258,6 @@ class DalangParser extends StringTokeniser {
       if (expect !== u && expect.indexOf(token.token) === -1) {
         this.exceptionToken = token;
         throw new Error(`UnexpectedToken: got ${token.token} expected ${expect}`);
-      }
-      if (vars) {
-        // console.log('TODO: expand vars in token');
       }
       return token;
     }
@@ -390,7 +432,7 @@ class DalangParser extends StringTokeniser {
         alias = { name: next(STRING).token };
         alias.args = consume('()', token.lineno);           // consume arguments
         alias.tokens = consume('{}', token.lineno);         // consume body
-        this.log(initial,`${statement} ${alias.name} (${alias.args.join(',')}) { ... }`);
+        this.log(initial,`${statement} ${alias.name} (${alias.args.map(a => a.token).join(' ')}) { ... }`);
         if (!skip) aliases[alias.name] = alias;
         break;
       case "test-id": case "field":
@@ -454,7 +496,7 @@ class DalangParser extends StringTokeniser {
         this.log(initial,statement);
         if (!skip) await dalang.info(); 
         break;
-      case "click": 
+      case "click": case "click-now":     // TODO: For now, click and click-now are the same
         this.log(initial,statement);
         if (!skip) {
           try {
@@ -575,7 +617,10 @@ class DalangParser extends StringTokeniser {
       case "wait":
         arg = next(NUMBER).token;
         this.log(initial,`${statement} ${arg}`);
-        if (!skip) await dalang.wait(arg);
+        if (!skip) {
+          this.epoch = Date.now();
+          await dalang.wait(arg);
+        }
         break;
       case "echo":
         arg = next(STRING).token;
@@ -666,9 +711,10 @@ class DalangParser extends StringTokeniser {
         if (alias === undefined) {
           Unexpected(token);
         } else {
-          this.log(initial,statement);
-          arg = {};
-          alias.args.forEach(name => arg[name] = next());          // pick up any arguments
+          const values = [];  // argument values
+          arg = {};           // map of tokens that equate to named arguments
+          alias.args.forEach(token => values.push((arg[token.token] = next()).token));          // pick up any arguments
+          this.log(initial,`${statement} ${values.join(' ')}`);
           if (!skip) await this.runAlias(alias, arg);
         }
       }
