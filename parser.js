@@ -375,10 +375,6 @@ class DalangParser extends StringTokeniser {
         break;
       case "call":
         call = { name: next(STRING).token };
-        switch(call.name) {             // TODO how do we do this properly?
-        case "setOption": call.name = "theApp." + call.name; break;
-        case "checkGlobals": call.name = "app." + call.name; break;
-        }
         call.args = consume('{}', token.lineno).map(arg => arg.type == NUMBER ? arg.token :  "'" + arg.token + "'");
         this.log(initial, `${statement} ${call.name} { ${call.args.join(',')} }`);
         if (!skip) {
@@ -443,7 +439,7 @@ class DalangParser extends StringTokeniser {
           break;
         case "dump":
           this.log(initial,`${statement} dump`);
-          if (!skip) await dalang.log(); 
+          if (!skip) await this.dumpConsole(); 
           break;
         default:
           Unexpected(token);
