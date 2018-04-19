@@ -18,6 +18,8 @@ class Dalang extends State {
     super();
     this.__config = {
       defaultTimeout: 30,
+      extraTimeout: 0,
+      waitMultiplier: 1,
       chrome: { x: 0, y: 0 },
       headless: true,
       sloMo: 0,
@@ -30,6 +32,7 @@ class Dalang extends State {
   }
 
   async run(script, config = {}) {
+    Object.assign(this.__config, config);
     const parser = new Parser(this, { wordChars: /[A-Za-z0-9$#_\-]/ });
     await Jest.test(script, async () => {
       await parser.run(script, config.cwd || process.cwd()).catch(e => {
@@ -202,7 +205,8 @@ class Dalang extends State {
   }
 
   wait(s) {
-    this.timeout = (s||this.__config.defaultTimeout) * 1000;
+    const { defaultTimeout, extraTimeout, waitMultiplier } = this.__config;
+    this.timeout = ((s||defaultTimeout) + extraTimeout) * waitMultiplier * 1000;
   }
   
   // selectors
