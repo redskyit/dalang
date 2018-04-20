@@ -93,7 +93,7 @@ class DalangParser extends StringTokeniser {
 
     // tokeniser that returns tokens from an array, expanding vars if necessary
     const tokeniser = (function(tokens) {
-      let i = 0;
+      let i = 0,v;
       const expand = (token) => {
         let s = token.token;
         // Expand $name variables
@@ -102,7 +102,7 @@ class DalangParser extends StringTokeniser {
           a.forEach(match => {
             if (match === s) {
               // token is just $name, replace token with arg
-              const v = vars[match.substr(1)];
+              v = vars[match.substr(1)];
               s = v.token;
               token.type = v.type;
             } else {
@@ -119,14 +119,14 @@ class DalangParser extends StringTokeniser {
           if (a) {
             a.forEach(match => {
               const a = match.split(/[()]/);
-              value = vars[a[1]];
-              if (a[0][1] === 'I') value = value|0;
+              v = vars[a[1]];
+              if (a[0][1] === 'I') v.token = v.token|0;
               if (match === s) {
                 // token is just the variable, token becomes the variable type
                 s = v.token;
                 token.type = v.type;
               } else {
-                s = s.replace(match, value);
+                s = s.replace(match, v.token);
                 token.type = STRING;
               }
             });
@@ -440,7 +440,7 @@ class DalangParser extends StringTokeniser {
         this.log(initial,`${statement} "${arg}"`);
         if (!skip) {
           try {
-            await dalang.testid(arg);
+            await dalang.testid(arg, { wait: state.browserWait * 1000 });
             condition(true);
           } catch (e) {
             condition(false, e);
@@ -452,7 +452,7 @@ class DalangParser extends StringTokeniser {
         this.log(initial,`${statement} "${arg}"`);
         if (!skip) {
           try {
-            await dalang.select(arg);
+            await dalang.select(arg, { wait: state.browserWait * 1000 });
             condition(true);
           } catch(e) {
             condition(false, e);
@@ -464,7 +464,7 @@ class DalangParser extends StringTokeniser {
         this.log(initial,`${statement} "${arg}"`);
         if (!skip) {
           try {
-            await dalang.xpath(arg);
+            await dalang.xpath(arg, { wait: state.browserWait * 1000 });
             condition(true);
           } catch(e) {
             condition(false, e);
