@@ -50,20 +50,25 @@ class Dalang extends State {
   }
 
   async _nodeInfo(element = this.state.element) {
-    const { page } = this.state;
-    const info = await page.evaluate(el => {
-      const info = {
-        nodeName: el.nodeName.toLowerCase(),
-        testid: el.getAttribute('test-id'),
-        value: el.value,
-        selectedValue: el.selectedValue,
-        displayed: dalang.isShown(el),           // was el.style.display !== 'none',
-        enabled: !el.disabled,
-        selected: el.checked,                         // TODO how do we do this in puppeteer?
-      };
-      info.textContent = info.displayed ? dalang.getVisibleText(el) : "";
-      return info;
-    }, element);
+    const { page, infoElement } = this.state;
+    let { info } = this.state;
+    if (infoElement !== element) {
+      this.state.infoElement = element;
+      info = this.state.info = await page.evaluate(el => {
+        const info = {
+          nodeName: el.nodeName.toLowerCase(),
+          testid: el.getAttribute('test-id'),
+          value: el.value,
+          selectedValue: el.selectedValue,
+          displayed: dalang.isShown(el),
+          enabled: !el.disabled,
+          selected: el.checked,        // TODO how do we do this in puppeteer?
+        };
+        info.textContent = info.displayed ? dalang.getVisibleText(el) : ''
+        info.outerHTML = el.outerHTML;
+        return info;
+      }, element);
+    }
     return info;
   }
 
@@ -206,7 +211,7 @@ class Dalang extends State {
 
   wait(s) {
     const { defaultTimeout, extraTimeout, waitMultiplier } = this.__config;
-    this.timeout = ((s||defaultTimeout) + extraTimeout) * waitMultiplier * 1000;
+    this.timeout = ((s == undefined ? defaultTimeout : s) + extraTimeout) * waitMultiplier * 1000;
   }
   
   // selectors
@@ -216,11 +221,18 @@ class Dalang extends State {
   *	@select
   * @param selector {string} css selector
   **/
-  async select(selector) {
+  async select(selector, opts = {}) {
     const { page } = this.state;
-    await page.waitForSelector(selector, { timeout: this.timeout });
+    const options = { timeout: opts.wait || this.timeout };
+    if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
+    try {
+      await page.waitForSelector(selector, options);
+    } catch(e) {
+      if (!this.state.not) throw e;
+      this.state.not = false;
+    }
     const element = await page.$(selector);
-    this.state = { type: "selector", selector, element };
+    this.state = { type: "selector", selector, element, selopts: opts };
     return element;
   }
 
@@ -229,12 +241,18 @@ class Dalang extends State {
   *	@xpath
   * @param xpath {string} xpath
   **/
-  async xpath(xpath) {
+  async xpath(xpath, opts = {}) {
     const { page } = this.state;
-    const options = { timeout: this.timeout };
-    await page.waitForXPath(xpath, options);
+    const options = { timeout: opts.wait || this.timeout };
+    if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
+    try {
+      await page.waitForXPath(xpath, options);
+    } catch(e) {
+      if (!this.state.not) throw e;
+      this.state.not = false;
+    }
     const element = await page.$x(xpath);
-    this.state = { type: "xpath", selector: xpath, element };
+    this.state = { type: "xpath", selector: xpath, element, selopts: opts };
     return element;
   }
 
@@ -243,17 +261,19 @@ class Dalang extends State {
   *	@testid
   * @param testid {string} test id
   **/
-  async testid(testid) {
+  async testid(testid, opts = {}) {
     const { page } = this.state;
+    const options = { timeout: opts.wait || this.timeout };
+    if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
     const selector = `*[test-id='${testid}']`;
     try {
-      await page.waitForSelector(selector, { timeout: this.timeout });
+      await page.waitForSelector(selector, options);
     } catch(e) {
-      console.dir(e);
-      throw e;
+      if (!this.state.not) throw e;
+      this.state.not = false;
     }
     const element = await page.$(selector);
-    this.state = { type: "test-id", selector: testid, element };
+    this.state = { type: "test-id", selector: testid, element, selopts: opts };
     return element;
   }
 
@@ -304,18 +324,37 @@ class Dalang extends State {
   // mechanism allows for a very flexible timeout system that allows the test designer to
   // easily set appropriate wait timeouts for subsequent checks.
   async __waitFor(thing) {
+    let exception;
     while (this.timeout > 0) {
       try {
         await thing();
         return;
       } catch(e) {
-        if (this.timeout <= 0) {
-          console.error(e);
-          throw e;
+        exception = e;
+        if (this.timeout > 0) {
+          await this.sleep(0.1);
+          await this._reselect();
         }
-        await this.sleep(0.1);
       }
     }
+    throw exception || new Error('wait timeout expired');
+  }
+
+  async _reselect() {
+    const { type, selector, selopts } = this.state;
+    switch(type) {
+    case "select":
+      await this.select(selector, selopts);
+      break;
+    case "xpath":
+      await this.xpath(selector, selopts);
+      break;
+    case "test-id":
+      await this.testid(selector, selopts);
+      break;
+    }
+    this.state.infoElement = null;  // force _nodeInfo() to requery details
+    await this.info();
   }
 
   async __getValue(info) {
@@ -478,13 +517,24 @@ class Dalang extends State {
   }
 
   async click() {
-    const { page, element } = this.state;
-    return await element.click();
+    const { element } = this.state;
+    try {
+      await this.__waitFor(async () => {
+        await element.click();
+      });
+    } catch(e) {
+      throw e;
+    }
   }
 
   async screenshot(fn) {
     const { page } = this.state;
     await page.screenshot({ path: fn });
+  }
+
+  async scrollIntoView() {
+    const { page, element } = this.state;
+    page.evaluate(el => el.scrollIntoView(true), element);
   }
 }
 
