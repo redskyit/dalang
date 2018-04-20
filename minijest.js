@@ -16,27 +16,27 @@ function expect(v) {
   let t;
   return {
     toBe: function(t) {
-      t = v === t;
+      const r = v === t;
       if (dont) {
-        if (t) throw new Error(`${state.name} test failed. Didn't expect [${v}] to be [${t}]`);
+        if (r) throw new Error(`${state.name} test failed. Didn't expect [${v}] to be [${t}]`);
       } else {
-        if (!t) throw new Error(`${state.name} test failed. Expected [${v}] to be [${t}]`);
+        if (!r) throw new Error(`${state.name} test failed. Expected [${v}] to be [${t}]`);
       }
     },
     toEqual: function(t) {
-      t = v == t;
+      const r = v == t;
       if (dont) {
-        if (t) throw new Error(`${state.name} test failed. Didn't expected [${v}] to equal [${t}]`);
+        if (r) throw new Error(`${state.name} test failed. Didn't expected [${v}] to equal [${t}]`);
       } else {
-        if (!t) throw new Error(`${state.name} test failed. Expected [${v}] to equal [${t}]`);
+        if (!r) throw new Error(`${state.name} test failed. Expected [${v}] to equal [${t}]`);
       }
     },
     toBeInRange: function(l,h) {
-      t = v >= l && v <= h;
+      const r = v >= l && v <= h;
       if (dont) {
-        if (t) throw new Error(`${state.name} test failed. Didn't expect [${v}] to be in range [${l}:${h}]`);
+        if (r) throw new Error(`${state.name} test failed. Didn't expect [${v}] to be in range [${l}:${h}]`);
       } else {
-        if (!t) throw new Error(`${state.name} test failed. Expected [${v}] to be in range [${l}:${h}]`);
+        if (!r) throw new Error(`${state.name} test failed. Expected [${v}] to be in range [${l}:${h}]`);
       }
     }
   }
