@@ -3,7 +3,7 @@ class State {
     this.__state = initialState || {};
   }
   set state(o) {
-    this.__state = Object.assign({}, this.__state, o);
+    Object.assign(this.__state, o);
   }
   get state() {
     return this.__state;
