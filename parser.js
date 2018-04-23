@@ -307,16 +307,16 @@ class DalangParser extends StringTokeniser {
     }
 
     // parse a,b with range and wildcard support a1:a2,b *,b etc
-    const parseAB = () => {       
+    const parseAB = (complex = true) => {       
       const ab = {};
 
       function getValue() {
         const arg = next();
-        if (arg.type === SYMBOL && arg.token === '*') {
+        if (complex && arg.type === SYMBOL && arg.token === '*') {
           return arg.token;
         } 
         if (arg.type === NUMBER) {
-          if (arg.nextch === ':') {
+          if (complex && arg.nextch === ':') {
             next();
             return [ arg.token, next(NUMBER).token ];
           }
@@ -330,6 +330,11 @@ class DalangParser extends StringTokeniser {
       ab.b = getValue();
 
       return ab;
+    };
+
+    const parseXY = (s) => {
+      const a = s.split(',');
+      return { x: a[0]|0, y: a[1]|0 };
     };
 
     const condition = (state, e) => {
@@ -439,7 +444,7 @@ class DalangParser extends StringTokeniser {
           }
         }
         break;
-      case "alias":
+      case "alias": case "function":    // function is an alias for alias, but implies arguments
         initial = token;
         alias = { name: next(STRING).token };
         alias.args = consume('()', token.lineno);           // consume arguments
@@ -717,6 +722,45 @@ class DalangParser extends StringTokeniser {
         arg = next(STRING).token;
         this.log(initial,`${statement} "${arg}"`);
         if (!skip) throw arg;
+        break;
+      case "mouse":
+        if (next(SYMBOL).token !== '{') Unexpected(token);
+        this.log(token,`${statement} {`);
+        next();
+        while (!(token.type === 2 && token.token === '}')) {
+          switch(token.token) {
+          case "body":
+            await dalang.select('body');
+            await dalang.mouseMoveTo({ x: 0, y: 0 });
+            break;
+          case "origin": case "0,0":
+            this.log(token,`${token.token}`);
+            await dalang.mouseMoveTo({ x: 0, y: 0 });
+            break;
+          case "center":
+            this.log(token,`${token.token}`);
+            await dalang.mouseCenter();
+            break;
+          case "click":
+            this.log(token,`${token.token}`);
+            await dalang.mouseClick();
+            break;
+          case "down":
+            this.log(token,`${token.token}`);
+            await dalang.mouseDown();
+            break;
+          case "up":
+            this.log(token,`${token.token}`);
+            await dalang.mouseUp();
+            break;
+          default:
+            if (token.type !== STRING) Unexpected(token);
+            this.log(token,`"${token.token}"`);
+            await dalang.mouseMoveBy(parseXY(token.token));
+            break;
+          }
+          next();
+        }
         break;
       default:
         alias = aliases[statement];

@@ -536,6 +536,50 @@ class Dalang extends State {
     const { page, element } = this.state;
     page.evaluate(el => el.scrollIntoView(true), element);
   }
+
+  async mouseCenter() {
+    const { page, element } = this.state;
+    const box = await this._boundingBox();
+    this.state.pos = { x: (box.width/2) | 0, y: (box.height/2) | 0 };
+    console.log(`mouseCentre ${this.state.pos.x},${this.state.pos.y}`);
+  }
+
+  async mouseClick() {
+    const { page } = this.state;
+    await page.mouse.click();
+  }
+
+  async mouseDown() {
+    const { page } = this.state;
+    await page.mouse.down();
+  }
+
+  async mouseMoveTo(xy) {
+    const { page } = this.state;
+    const box = await this._boundingBox();
+    console.dir(box);
+    console.log(`move to ${xy.x},${xy.y} abs ${box.x + xy.x},${box.y + xy.y}`);
+    this.state.pos = xy;
+    await page.mouse.move(box.x + xy.x, box.y + xy.y);
+  }
+
+  async mouseMoveBy(xy) {
+    const { page, pos } = this.state;
+    const box = await this._boundingBox();
+    console.log(`box is ${JSON.stringify(box)}`);
+    console.log(`pos is ${JSON.stringify(pos)}`);
+    console.log(`move by ${xy.x},${xy.y}`);
+    xy.x += pos.x;
+    xy.y += pos.y;
+    console.log(`move to ${xy.x},${xy.y} abs ${box.x + xy.x},${box.y + xy.y}`);
+    this.state.pos = xy;
+    await page.mouse.move(box.x + xy.x, box.y + xy.y);
+  }
+
+  async mouseUp() {
+    const { page } = this.state;
+    await page.mouse.up();
+  }
 }
 
 module.exports = new Dalang();
