@@ -136,10 +136,11 @@ class Tokeniser {
     this.token = token;
     this.type = type;
     this.nextch = nextch;
+    this.quote = q || '';
     if (type === NUMBER) {
       token = parseFloat(token);
     }
-    return { token, type, nextch, lineno: this.lineno };
+    return { token, type, nextch, lineno: this.lineno, quote: this.quote };
   }
   peek() {
     if (this.nextToken) return this.nextToken;
