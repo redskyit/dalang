@@ -120,11 +120,18 @@ class DalangParser extends StringTokeniser {
             a.forEach(match => {
               const a = match.split(/[()]/);
               v = vars[a[1]];
-              if (a[0][1] === 'I') v.token = v.token|0;
+              if (a[0][1] === 'I') {
+                v.token = v.token|0;
+                v.type = NUMBER;
+              }
               if (match === s) {
                 // token is just the variable, token becomes the variable type
-                s = v.token;
-                token.type = v.type;
+                if (token.quote) {
+                  s = ""+v.token;
+                } else {
+                  s = v.token;
+                  token.type = v.type;
+                }
               } else {
                 s = s.replace(match, v.token);
                 token.type = STRING;
