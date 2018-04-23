@@ -517,10 +517,10 @@ class Dalang extends State {
   }
 
   async click() {
-    const { element } = this.state;
+    const { page, element } = this.state;
     try {
       await this.__waitFor(async () => {
-        await element.click();
+        await page.evaluate(el => el.click(), element);
       });
     } catch(e) {
       throw e;
