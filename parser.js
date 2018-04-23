@@ -239,7 +239,14 @@ class DalangParser extends StringTokeniser {
 
   async dumpConsole() {
     this.console.map(msg => {
-      console.log(msg.text());
+      switch(msg.type()) {
+      case 'log': case 'debug': case 'info': case 'error': case 'warning':
+        console.log(msg.text());
+        break;
+      default:
+        console.log(`${msg.type()}> ${msg.text()}`);
+        break;
+      }
     });
     this.console = [];
   }
@@ -727,17 +734,22 @@ class DalangParser extends StringTokeniser {
         if (next(SYMBOL).token !== '{') Unexpected(token);
         this.log(token,`${statement} {`);
         next();
+        await dalang.mouseCenter();
         while (!(token.type === 2 && token.token === '}')) {
           switch(token.token) {
           case "body":
             await dalang.select('body');
             await dalang.mouseMoveTo({ x: 0, y: 0 });
             break;
-          case "origin": case "0,0":
+          case "origin": 
             this.log(token,`${token.token}`);
             await dalang.mouseMoveTo({ x: 0, y: 0 });
             break;
-          case "center":
+          case "0,0":
+            this.log(token,`"${token.token}"`);
+            await dalang.mouseMoveTo({ x: 0, y: 0 });
+            break;
+          case "center": case "centre":
             this.log(token,`${token.token}`);
             await dalang.mouseCenter();
             break;
@@ -752,6 +764,11 @@ class DalangParser extends StringTokeniser {
           case "up":
             this.log(token,`${token.token}`);
             await dalang.mouseUp();
+            break;
+          case "sleep":
+            arg = next(NUMBER).token;
+            this.log(initial,`sleep ${arg}`);
+            await dalang.sleep(arg); 
             break;
           default:
             if (token.type !== STRING) Unexpected(token);

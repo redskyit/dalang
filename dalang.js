@@ -540,13 +540,13 @@ class Dalang extends State {
   async mouseCenter() {
     const { page, element } = this.state;
     const box = await this._boundingBox();
-    this.state.pos = { x: (box.width/2) | 0, y: (box.height/2) | 0 };
-    console.log(`mouseCentre ${this.state.pos.x},${this.state.pos.y}`);
+    await this.mouseMoveTo(this.state.pos = { x: (box.width/2) | 0, y: (box.height/2) | 0 });
   }
 
   async mouseClick() {
-    const { page } = this.state;
-    await page.mouse.click();
+    const { page, pos } = this.state;
+    const box = await this._boundingBox();
+    await page.mouse.click(box.x + pos.x, box.y + pos.y);
   }
 
   async mouseDown() {
@@ -557,23 +557,16 @@ class Dalang extends State {
   async mouseMoveTo(xy) {
     const { page } = this.state;
     const box = await this._boundingBox();
-    console.dir(box);
-    console.log(`move to ${xy.x},${xy.y} abs ${box.x + xy.x},${box.y + xy.y}`);
-    this.state.pos = xy;
+    this.state.pos = Object.assign({}, xy);
     await page.mouse.move(box.x + xy.x, box.y + xy.y);
   }
 
   async mouseMoveBy(xy) {
     const { page, pos } = this.state;
     const box = await this._boundingBox();
-    console.log(`box is ${JSON.stringify(box)}`);
-    console.log(`pos is ${JSON.stringify(pos)}`);
-    console.log(`move by ${xy.x},${xy.y}`);
-    xy.x += pos.x;
-    xy.y += pos.y;
-    console.log(`move to ${xy.x},${xy.y} abs ${box.x + xy.x},${box.y + xy.y}`);
-    this.state.pos = xy;
-    await page.mouse.move(box.x + xy.x, box.y + xy.y);
+    pos.x += xy.x;
+    pos.y += xy.y;
+    await page.mouse.move(box.x + pos.x, box.y + pos.y);
   }
 
   async mouseUp() {
