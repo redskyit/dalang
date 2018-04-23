@@ -26,7 +26,7 @@ class DalangParser extends StringTokeniser {
 
   log(token, message) {
     const s = ((Date.now()-this.epoch)/1000).toLocaleString('en-GB', { minimumIntegerDigits: 2, minimumFractionDigits: 3 });
-    console.log(`${s} [${this.scripts[this.scripts.length-1]},${token.lineno}] ${this.state.skip ? '// ' : ''}${message}`);
+    console.log(`${s} [${this.scripts[this.scripts.length-1].name},${token.lineno}] ${this.state.skip ? '// ' : ''}${message}`);
   }
 
   async open(fn, cwd) {
@@ -46,7 +46,7 @@ class DalangParser extends StringTokeniser {
   }
 
   async run(script, cwd) {
-    this.scripts.push(path.basename(script));
+    this.scripts.push({ cwd: cwd, path: path, name: path.basename(script) });
     const { tokeniser, dirname } = await this.open(script, cwd);
     let token = tokeniser.next();
     let next;
@@ -168,7 +168,7 @@ class DalangParser extends StringTokeniser {
   }
 
   async runAlias(alias, args) {
-    this.scripts.push(alias.name);
+    this.scripts.push({ cwd: this.scripts[this.scripts.length-1].cwd, path: null, name: alias.name });
     await this.runTokens(alias.tokens, args);
     this.scripts.pop();
   }
@@ -182,17 +182,22 @@ class DalangParser extends StringTokeniser {
     this.log(token, `> ${cmd.name} ${cmd.args.join(' ')}`);
 
     return new Promise((ok,r) => {
-      const proc = spawn(cmd.name, cmd.args, { cwd: cwd });
+      const proc = spawn(cmd.name, cmd.args, { cwd: this.scripts[0].cwd });
       let l = {};
       function out(n,d) {
-        const lines = d.toString().split('\n');
-        if (l[n]) lines[0] = l[n] + lines[0];
-        l[n] = lines.pop();
-        lines.map(line => console.log(`${n}> ${line}`));
+        if (d) {
+          const lines = d.toString().split('\n');
+          if (l[n]) lines[0] = l[n] + lines[0];
+          l[n] = lines.pop();
+          lines.map(line => console.log(`${n}> ${line}`));
+        } else if (l[n]) {
+          console.log(`${n}> ${l[n]}`);
+        }
       }
       proc.stdout.on('data', (data) => out('stdout',data));
       proc.stderr.on('data', (data) => out('stderr',data));
       proc.on('close', (code) => {
+        out('stdout'); out('stderr');
         if (code !== 0) {
           this.log(token, `process exited with code ${code}`);
           r(code);
@@ -676,7 +681,7 @@ class DalangParser extends StringTokeniser {
           exec.args = consume('{}', token.lineno);         // consume arguments {...} (old style)
         }
         exec.args = exec.args.map(arg => arg.token);
-        this.log(initial,`${statement} ${exec.name} (${exec.args.join(' ')})`);
+        this.log(initial,`${statement} ${exec.name} ${exec.args.join(' ')}`);
         if (!skip) {
           try {
             await this.exec(initial, exec, cwd);
