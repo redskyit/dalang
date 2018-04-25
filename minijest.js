@@ -15,6 +15,14 @@ function expect(v) {
   const dont = this._dont;
   let t;
   return {
+    toBeWithin: function(t, range) {
+      const r = Math.abs(v - t) < range;
+      if (dont) {
+        if (r) throw new Error(`${state.name} test failed. Didn't expect [${v}] to be within ${range} of [${t}]`);
+      } else {
+        if (!r) throw new Error(`${state.name} test failed. Expected [${v}] to be within ${range} of [${t}]`);
+      }
+    },
     toBe: function(t) {
       const r = v === t;
       if (dont) {
