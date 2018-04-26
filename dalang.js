@@ -21,10 +21,12 @@ class Dalang extends State {
       extraTimeout: 0,
       waitMultiplier: 1,
       chrome: { x: 0, y: 0 },
+      selenium: false,              // ScriptDriver compatible
       headless: true,
       sloMo: 0,
     };
     this.timeout = this.__config.defaultTimeout * 1000;
+    this.states = [];
   }
 
   version() {
@@ -37,7 +39,8 @@ class Dalang extends State {
     await Jest.test(script, async () => {
       await parser.run(script, config.cwd || process.cwd()).catch(e => {
         // handle failure
-        console.error(e);
+        console.log('parser exception');
+        console.log(e);
       });
     });
   }
@@ -49,11 +52,16 @@ class Dalang extends State {
     this.state = { timeout: Date.now() + ms };	// when to timeout in ms
   }
 
+  _assertions(element = this.state.element) {
+    if (!element) throw new Error('Fatal error, no current selection');
+  }
+
   async _nodeInfo(element = this.state.element) {
     const { page, infoElement } = this.state;
     let { info } = this.state;
     if (infoElement !== element) {
       this.state.infoElement = element;
+      this._assertions(element);
       info = this.state.info = await page.evaluate(el => {
         const info = {
           nodeName: el.nodeName.toLowerCase(),
@@ -73,15 +81,10 @@ class Dalang extends State {
   }
 
   async _boundingBox(element = this.state.element) {
+    this._assertions(element);
+    const { selenium } = this.__config;
     const box = await element.boundingBox();
-    if (box) {
-      box.x = Math.round(box.x,0);
-      box.y = Math.round(box.y,0);
-      box.width = Math.round(box.width,0);
-      box.height = Math.round(box.height,0);
-      return box;
-    }
-    return { x: 0, y: 0, width: 0, height: 0 };
+    return box ? box : { x: 0, y: 0, width: 0, height: 0 };
   }
 
   // test interface
@@ -117,14 +120,18 @@ class Dalang extends State {
     if (width && height) this.arg(`--window-size=${width+chrome.x},${height+chrome.y}`);
     args.push('--no-startup-window');
     args.push('--disable-dev-shm-usage');
+    args.push('--disable-crash-reporter');
+    args.push('--disable-breakpad');      // crash reporter can cause browser.close() to hang
     console.dir(args);
     const browser = await puppeteer.launch({ headless, sloMo, args });
+    console.log('browser endpoint ' + browser.wsEndpoint());
+    browser.on('disconnected', () => console.log(`browser disconnected`));
     const pages = await browser.pages();
     if (pages.length === 0) {
         pages.push(await browser.newPage());
     }
     this.state = { browser, pages, page: pages[0] };
-    if (width && height) this.viewport({ width, height });
+    if (width && height) await this.viewport({ width, height });
     return pages[0];
   }
 
@@ -142,6 +149,10 @@ class Dalang extends State {
     }
   }
 
+  async browser(command, args) {
+      await this.state.browser._connection.send(command, args);
+  }
+
   async browserInfo() {
     const { page } = this.state;
     const size = await page.waitForFunction(() => {
@@ -150,21 +161,46 @@ class Dalang extends State {
     return size;
   }
 
-  async _initDalangBrowserAPI() {
+  async _injectDalangBrowserAPI() {
     await this.state.page.evaluate(`
       window.dalang = {
+        _isBlock: function(el) {
+          var display = getComputedStyle(el).display;
+          if (display) {
+            switch (display) {
+              case "block": return true;
+              case "inherit": break;
+              default: return false;
+            }
+          }
+          switch(node.nodeName.toLowerCase()) {
+          case "span": case "b": case "i":
+            return false;
+          }
+          return true;
+        },
         getVisibleText: function(el) {
           var text = '', s, cns = el.childNodes;
           for (var i = 0; i < cns.length; i++) { 
             var node = cns[i];
+            var sep = ' ';
             if (node.nodeType == 1) {
-              s = this.getVisibleText(node);
+              switch(node.nodeName.toLowerCase()) {
+              case "style": case "script": break;
+              default:
+                s = this.getVisibleText(node);
+                if (this._isBlock(node)) sep = '\\n';
+                break;
+              }
             } else if (node.nodeType == 3) {
               s = node.textContent;
             } else {
               s = '';
             }
-            if (s) text = (text && text + ' ') + s.replace(/^[ ]+|[ ]+$/,'');   // trim only soft space
+            s = s.replace(/[\\n]+/g,'\\n').replace(/^[ \\t\\n]+|[ \\t\\n]+$/,'');   // trim only soft space
+            if (s) {
+              text = (text && text + sep) + s;
+            }
           }
           return text.replace(String.fromCharCode(160),' ');
         },
@@ -196,11 +232,14 @@ class Dalang extends State {
 
   async get(url) {
     await this.state.page.goto(url);
-    await this._initDalangBrowserAPI();
+    await this._injectDalangBrowserAPI();
   }
 
   async close() {
+    console.log('close browser');
+    this.state.closing = true;
     await this.state.browser.close();
+    console.log('done close browser');
   }
 
   // timing
@@ -223,6 +262,10 @@ class Dalang extends State {
   **/
   async select(selector, opts = {}) {
     const { page } = this.state;
+    if (this.state.element) {
+      this.state.element.dispose();
+      this.state.element = null;
+    }
     const options = { timeout: opts.wait || this.timeout };
     if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
     try {
@@ -232,6 +275,7 @@ class Dalang extends State {
       this.state.not = false;
     }
     const element = await page.$(selector);
+    if (!element) throw new Error('failed to select element');
     this.state = { type: "selector", selector, element, selopts: opts };
     return element;
   }
@@ -243,6 +287,10 @@ class Dalang extends State {
   **/
   async xpath(xpath, opts = {}) {
     const { page } = this.state;
+    if (this.state.element) {
+      this.state.element.dispose();
+      this.state.element = null;
+    }
     const options = { timeout: opts.wait || this.timeout };
     if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
     try {
@@ -252,6 +300,7 @@ class Dalang extends State {
       this.state.not = false;
     }
     const element = await page.$x(xpath);
+    if (!element) throw new Error('failed to select element');
     this.state = { type: "xpath", selector: xpath, element, selopts: opts };
     return element;
   }
@@ -263,6 +312,10 @@ class Dalang extends State {
   **/
   async testid(testid, opts = {}) {
     const { page } = this.state;
+    if (this.state.element) {
+      this.state.element.dispose();
+      this.state.element = null;
+    }
     const options = { timeout: opts.wait || this.timeout };
     if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
     const selector = `*[test-id='${testid}']`;
@@ -273,6 +326,7 @@ class Dalang extends State {
       this.state.not = false;
     }
     const element = await page.$(selector);
+    if (!element) throw new Error('failed to select element');
     this.state = { type: "test-id", selector: testid, element, selopts: opts };
     return element;
   }
@@ -280,13 +334,14 @@ class Dalang extends State {
   // informational
 
   async info({ type = this.state.type, element = this.state.element, selector = this.state.selector } = {}) {
+    this._assertions(element);
     const { page } = this.state;
     const box = await this._boundingBox(element);
     const info = await this._nodeInfo(element);
     const value = await this.__getValue(info);
     console.log(`${type} "${selector}" info tag ${info.nodeName}`
                 + ` ${info.displayed ? '' : 'not '}displayed`
-                + ` at ${box.x},${box.y} size ${box.width},${box.height}`
+                + ` at ${Math.round(box.x)},${Math.round(box.y)} size ${Math.round(box.width,0)},${Math.round(box.height)}`
                 + ` ${info.enabled ? '' : 'not '}enabled`
                 + ` ${info.selected ? '' : 'not '}selected`
                 + (value.indexOf('\n') == -1 ? ` check "${value}"` : ` checksum "crc32:${crc32(value).toString(10)}"`)
@@ -332,7 +387,7 @@ class Dalang extends State {
       } catch(e) {
         exception = e;
         if (this.timeout > 0) {
-          await this.sleep(0.1);
+          await this.sleep(1);
           await this._reselect();
         }
       }
@@ -376,6 +431,7 @@ class Dalang extends State {
   }
 
   async selected() {
+    this._assertions();
     const Jest = this.jest();
     try {
       await this.__waitFor(async () => {
@@ -388,6 +444,7 @@ class Dalang extends State {
   }
 
   async displayed() {
+    this._assertions();
     const Jest = this.jest();
     try {
       await this.__waitFor(async () => {
@@ -400,6 +457,7 @@ class Dalang extends State {
   }
 
   async enabled() {
+    this._assertions();
     const Jest = this.jest();
     try {
       await this.__waitFor(async () => {
@@ -412,6 +470,7 @@ class Dalang extends State {
   }
 
   async check(check) {
+    this._assertions();
     const Jest = this.jest();
     try {
       await this.__waitFor(async () => {
@@ -424,6 +483,7 @@ class Dalang extends State {
   }
 
   async checksum(sum) {
+    this._assertions();
     const Jest = this.jest();
     try {
       await this.__waitFor(async () => {
@@ -442,19 +502,21 @@ class Dalang extends State {
   async at(x, y) {
     const Jest = this.jest();
     const { page, element } = this.state;
+    this._assertions(element);
     try {
       await this.__waitFor(async () => {
         const box = await this._boundingBox();
         if (x !== '*' && x !== undefined) {
           if (typeof x === "number") {
-            Jest.expect(box.x).toBe(x);
+            // fuzzy logic, because box can be fraction, but tests use integers, rounding is unreliable
+            Jest.expect(box.x).toBeWithin(x,1);
           } else {
             Jest.expect(box.x).toBeInRange(x[0], x[1]);
           }
         }
         if (y !== '*' && y !== undefined) {
           if (typeof y === "number") {
-            Jest.expect(box.y).toBe(y);
+            Jest.expect(box.y).toBeWithin(y,1);
           } else {
             Jest.expect(box.y).toBeInRange(y[0], y[1]);
           }
@@ -468,19 +530,20 @@ class Dalang extends State {
   async size(width, height) {
     const Jest = this.jest();
     const { page, element } = this.state;
+    this._assertions(element);
     try {
       await this.__waitFor(async () => {
         const box = await this._boundingBox();
         if (width !== '*' && width !== undefined) {
           if (typeof width === "number") {
-            Jest.expect(box.width).toBe(width);
+            Jest.expect(box.width).toBeWithin(width,1);
           } else {
             Jest.expect(box.width).toBeInRange(width[0], width[1]);
           }
         }
         if (height !== '*' && height !== undefined) {
           if (typeof height === "number") {
-            Jest.expect(box.height).toBe(height);
+            Jest.expect(box.height).toBeWithin(height,1);
           } else {
             Jest.expect(box.width).toBeInRange(width[0], width[1]);
           }
@@ -492,15 +555,23 @@ class Dalang extends State {
   }
 
   async tag(name) {
+    this._assertions();
     const Jest = this.jest();
-    const info = await this._nodeInfo();
-    Jest.expect(info.nodeName).toBe(name.toLowerCase());
+    try {
+      await this.__waitFor(async () => {
+        const info = await this._nodeInfo();
+        Jest.expect(info.nodeName).toBe(name.toLowerCase());
+      });
+    } catch(e) {
+      throw e;
+    }
   }
 
   // actions
 
   async clear() {
     const { page, element } = this.state;
+    this._assertions(element);
     try {
       return await page.evaluate(el => el.value = '', element);
     } catch(e) {
@@ -509,6 +580,7 @@ class Dalang extends State {
   }
 
   async send(text) {
+    this._assertions();
     try {
       return await this.state.element.type(text);
     } catch(e) {
@@ -518,9 +590,18 @@ class Dalang extends State {
 
   async click() {
     const { page, element } = this.state;
+    this._assertions(element);
     try {
       await this.__waitFor(async () => {
-        await page.evaluate(el => el.click(), element);
+        switch (element._remoteObject.className) {
+        case 'HTMLButtonElement':
+          await element.click({ delay: 0 });
+          break;
+        case 'HTMLDivElement':
+        default:
+          await page.evaluate(el => el.click(), element);
+          break;
+        }
       });
     } catch(e) {
       throw e;
@@ -534,11 +615,12 @@ class Dalang extends State {
 
   async scrollIntoView() {
     const { page, element } = this.state;
-    page.evaluate(el => el.scrollIntoView(true), element);
+    this._assertions(element);
+    await page.evaluate(el => el.scrollIntoView(true), element);
   }
 
   async mouseCenter() {
-    const { page, element } = this.state;
+    const { page } = this.state;
     const box = await this._boundingBox();
     await this.mouseMoveTo(this.state.pos = { x: (box.width/2) | 0, y: (box.height/2) | 0 });
   }
@@ -573,6 +655,28 @@ class Dalang extends State {
     const { page } = this.state;
     await page.mouse.up();
   }
+
+  push() {
+    const { type, selector, element, selopts } = this.state;
+    this.states.push({ type, selector, element, selopts });
+  }
+
+  pop() {
+    if (this.state.element) {
+      console.log('dispose element');
+      this.state.element.dispose();
+      this.state.element = null;
+    }
+    this.state = this.states.pop();
+  }
+
+  async refresh() {
+    const { page } = this.state;
+    await page.evaluate('location.reload()');
+    await page.waitForNavigation({ waitUntil: 'networkidle0' });
+    await this._injectDalangBrowserAPI();
+  }
+
 }
 
 module.exports = new Dalang();
