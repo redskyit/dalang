@@ -4,6 +4,8 @@ const State = require('./state');
 const Jest = require('./minijest');
 const Parser = require('./parser');
 const VERSION = require('./version');
+const { exec } = require('child_process');
+const ps = require('ps-node');
 
 /**
 * The Dalang API.
@@ -26,7 +28,6 @@ class Dalang extends State {
       sloMo: 0,
     };
     this.timeout = this.__config.defaultTimeout * 1000;
-    this.states = [];
   }
 
   version() {
@@ -62,27 +63,18 @@ class Dalang extends State {
     if (infoElement !== element) {
       this.state.infoElement = element;
       this._assertions(element);
-      info = this.state.info = await page.evaluate(el => {
-        const info = {
-          nodeName: el.nodeName.toLowerCase(),
-          testid: el.getAttribute('test-id'),
-          value: el.value,
-          selectedValue: el.selectedValue,
-          displayed: dalang.isShown(el),
-          enabled: !el.disabled,
-          selected: el.checked,        // TODO how do we do this in puppeteer?
-        };
-        info.textContent = info.displayed ? dalang.getVisibleText(el) : ''
-        info.outerHTML = el.outerHTML;
-        return info;
-      }, element);
+      try {
+        info = this.state.info = await page.evaluate(el => dalang._nodeInfo(el), element);
+      } catch(e) {
+        console.log(e);     // probably due to a bug in dalang
+        throw e;
+      }
     }
     return info;
   }
 
   async _boundingBox(element = this.state.element) {
     this._assertions(element);
-    const { selenium } = this.__config;
     const box = await element.boundingBox();
     return box ? box : { x: 0, y: 0, width: 0, height: 0 };
   }
@@ -164,6 +156,22 @@ class Dalang extends State {
   async _injectDalangBrowserAPI() {
     await this.state.page.evaluate(`
       window.dalang = {
+        _nodeInfo: function(el) {
+          const start = Date.now();
+          const info = {
+            nodeName: el.nodeName.toLowerCase(),
+            testid: el.getAttribute('test-id'),
+            value: el.value,
+            selectedValue: el.selectedValue,
+            displayed: this.isShown(el),
+            enabled: !el.disabled,
+            selected: el.checked,        // TODO how do we do this in puppeteer?
+          };
+          info.textContent = info.displayed ? dalang.getVisibleText(el) : '';
+          info.outerHTML = el.outerHTML;
+          info.took = Date.now() - start;
+          return info;
+        },
         _isBlock: function(el) {
           var display = getComputedStyle(el).display;
           if (display) {
@@ -235,11 +243,25 @@ class Dalang extends State {
     await this._injectDalangBrowserAPI();
   }
 
+  async kill() {
+    ps.lookup({ command: 'Chromium' }, (e, procs) => {
+      procs.forEach(proc => {
+        if (proc.args[0] === 'Framework.framework/Helpers/crashpad_handler') {
+          console.dir(proc);
+        }
+      });
+    });
+    console.log(`kill $(ps -ef | awk '/puppeteer\/.local-chromium.*crashpad_handler/ { print $2; exit 0; }')`);
+    exec(`kill $(ps -ef | awk '/puppeteer\/.local-chromium.*crashpad_handler/ { print $2; exit 0; }')`);
+  }
+
   async close() {
     console.log('close browser');
+    const timer = setTimeout(() => this.kill(),5000);
     this.state.closing = true;
     await this.state.browser.close();
     console.log('done close browser');
+    clearTimeout(timer);
   }
 
   // timing
@@ -261,7 +283,7 @@ class Dalang extends State {
   * @param selector {string} css selector
   **/
   async select(selector, opts = {}) {
-    const { page } = this.state;
+    const { page, not } = this.state;
     if (this.state.element) {
       this.state.element.dispose();
       this.state.element = null;
@@ -275,7 +297,7 @@ class Dalang extends State {
       this.state.not = false;
     }
     const element = await page.$(selector);
-    if (!element) throw new Error('failed to select element');
+    if (!not & !element) throw new Error('failed to select element');
     this.state = { type: "selector", selector, element, selopts: opts };
     return element;
   }
@@ -286,7 +308,7 @@ class Dalang extends State {
   * @param xpath {string} xpath
   **/
   async xpath(xpath, opts = {}) {
-    const { page } = this.state;
+    const { page, not } = this.state;
     if (this.state.element) {
       this.state.element.dispose();
       this.state.element = null;
@@ -300,7 +322,7 @@ class Dalang extends State {
       this.state.not = false;
     }
     const element = await page.$x(xpath);
-    if (!element) throw new Error('failed to select element');
+    if (!not & !element) throw new Error('failed to select element');
     this.state = { type: "xpath", selector: xpath, element, selopts: opts };
     return element;
   }
@@ -311,7 +333,7 @@ class Dalang extends State {
   * @param testid {string} test id
   **/
   async testid(testid, opts = {}) {
-    const { page } = this.state;
+    const { page, not } = this.state;
     if (this.state.element) {
       this.state.element.dispose();
       this.state.element = null;
@@ -326,7 +348,7 @@ class Dalang extends State {
       this.state.not = false;
     }
     const element = await page.$(selector);
-    if (!element) throw new Error('failed to select element');
+    if (!not && !element) throw new Error('failed to select element');
     this.state = { type: "test-id", selector: testid, element, selopts: opts };
     return element;
   }
@@ -380,18 +402,17 @@ class Dalang extends State {
   // easily set appropriate wait timeouts for subsequent checks.
   async __waitFor(thing) {
     let exception;
-    while (this.timeout > 0) {
+    do {
       try {
         await thing();
         return;
       } catch(e) {
         exception = e;
-        if (this.timeout > 0) {
-          await this.sleep(1);
-          await this._reselect();
-        }
+        await this.sleep(1);
+        await this._reselect();
       }
-    }
+    } while(this.timeout > 0);
+    console.log('wait timeout expired');
     throw exception || new Error('wait timeout expired');
   }
 
@@ -619,16 +640,26 @@ class Dalang extends State {
     await page.evaluate(el => el.scrollIntoView(true), element);
   }
 
+  mouseInit() {
+    this.state.mouse = {};
+  }
+
+  async mouseBody() {
+    const { page, element, mouse } = this.state;
+    if (mouse.element) mouse.element.dispose();
+    mouse.element = await page.$('body');
+  }
+
   async mouseCenter() {
-    const { page } = this.state;
-    const box = await this._boundingBox();
-    await this.mouseMoveTo(this.state.pos = { x: (box.width/2) | 0, y: (box.height/2) | 0 });
+    const { page, mouse, element } = this.state;
+    const box = await (mouse.element || element).boundingBox();
+    await this.mouseMoveTo(mouse.pos = { x: (box.width/2) | 0, y: (box.height/2) | 0 });
   }
 
   async mouseClick() {
-    const { page, pos } = this.state;
-    const box = await this._boundingBox();
-    await page.mouse.click(box.x + pos.x, box.y + pos.y);
+    const { page, mouse, element } = this.state;
+    const box = await (mouse.element || element).boundingBox();
+    await page.mouse.click(box.x + mouse.pos.x, box.y + mouse.pos.y);
   }
 
   async mouseDown() {
@@ -637,18 +668,18 @@ class Dalang extends State {
   }
 
   async mouseMoveTo(xy) {
-    const { page } = this.state;
-    const box = await this._boundingBox();
-    this.state.pos = Object.assign({}, xy);
+    const { page, mouse, element } = this.state;
+    const box = await (mouse.element || element).boundingBox();
+    mouse.pos = Object.assign({}, xy);
     await page.mouse.move(box.x + xy.x, box.y + xy.y);
   }
 
   async mouseMoveBy(xy) {
-    const { page, pos } = this.state;
-    const box = await this._boundingBox();
-    pos.x += xy.x;
-    pos.y += xy.y;
-    await page.mouse.move(box.x + pos.x, box.y + pos.y);
+    const { page, mouse, element } = this.state;
+    const box = await (mouse.element || element).boundingBox();
+    mouse.pos.x += xy.x;
+    mouse.pos.y += xy.y;
+    await page.mouse.move(box.x + mouse.pos.x, box.y + mouse.pos.y);
   }
 
   async mouseUp() {
@@ -656,18 +687,10 @@ class Dalang extends State {
     await page.mouse.up();
   }
 
-  push() {
-    const { type, selector, element, selopts } = this.state;
-    this.states.push({ type, selector, element, selopts });
-  }
-
-  pop() {
-    if (this.state.element) {
-      console.log('dispose element');
-      this.state.element.dispose();
-      this.state.element = null;
-    }
-    this.state = this.states.pop();
+  mouseDispose() {
+    const { element, mouse } = this.state;
+    if (mouse.element) mouse.element.dispose();
+    this.state.mouse = null;
   }
 
   async refresh() {

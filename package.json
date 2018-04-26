@@ -23,6 +23,7 @@
   "homepage": "https://github.com/redskyit/dalang#readme",
   "dependencies": {
     "crc": "^3.5.0",
+    "ps-node": "^0.1.6",
     "puppeteer": "^1.2.0"
   },
   "devDependencies": {

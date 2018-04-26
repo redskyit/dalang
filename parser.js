@@ -649,7 +649,9 @@ class DalangParser extends StringTokeniser {
         this.log(initial,`${statement} "${arg}"`);
         if (!skip) {
           try {
+          this.log(initial, 'call dalang.check');
             await dalang.check(arg);
+          this.log(initial, 'done call dalang.check');
             condition(true);
           } catch(e) { 
             condition(false,e);
@@ -770,14 +772,13 @@ class DalangParser extends StringTokeniser {
         if (next(SYMBOL).token !== '{') Unexpected(token);
         this.log(token,`${statement} {`);
         next();
+        await dalang.mouseInit();
         await dalang.mouseCenter();
         while (!(token.type === SYMBOL && token.token === '}')) {
           switch(token.token) {
           case "body":
-            dalang.push();
-            await dalang.select('body');
-            await dalang.mouseMoveTo({ x: 0, y: 0 });
-            dalang.pop();
+            this.log(token,`${token.token}`);
+            await dalang.mouseBody();
             break;
           case "origin": 
             this.log(token,`${token.token}`);
@@ -816,6 +817,7 @@ class DalangParser extends StringTokeniser {
           }
           next();
         }
+        dalang.mouseDispose();
         break;
       case "while":
         initial = token;
