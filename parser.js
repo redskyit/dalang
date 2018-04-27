@@ -625,7 +625,9 @@ class DalangParser extends StringTokeniser {
         this.log(initial,`${statement} ${x},${y}`);
         if (!skip) {
           try { 
+            const start = Date.now();
             await dalang.at(x,y);
+            console.log(`dalang.at took ${(Date.now()-start)/1000}s`);
             condition(true);
           } catch(e) {
             condition(false,e);
@@ -649,9 +651,9 @@ class DalangParser extends StringTokeniser {
         this.log(initial,`${statement} "${arg}"`);
         if (!skip) {
           try {
-          this.log(initial, 'call dalang.check');
+            const start = Date.now();
             await dalang.check(arg);
-          this.log(initial, 'done call dalang.check');
+            console.log(`dalang.check took ${(Date.now()-start)/1000}s`);
             condition(true);
           } catch(e) { 
             condition(false,e);
