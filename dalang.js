@@ -181,8 +181,8 @@ class Dalang extends State {
               default: return false;
             }
           }
-          switch(node.nodeName.toLowerCase()) {
-          case "span": case "b": case "i":
+          switch(node.nodeName) {
+          case "SPAN": case "B": case "I":
             return false;
           }
           return true;
@@ -193,8 +193,8 @@ class Dalang extends State {
             var node = cns[i];
             var sep = ' ';
             if (node.nodeType == 1) {
-              switch(node.nodeName.toLowerCase()) {
-              case "style": case "script": break;
+              switch(node.nodeName) {
+              case "STYLE": case "SCRIPT": break;
               default:
                 s = this.getVisibleText(node);
                 if (this._isBlock(node)) sep = '\\n';
