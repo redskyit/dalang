@@ -275,6 +275,34 @@ class Dalang extends State {
     this.timeout = ((s == undefined ? defaultTimeout : s) + extraTimeout) * waitMultiplier * 1000;
   }
   
+  async _selector(selector, type, opts = {}, wait, $) {
+    const { page, not } = this.state;
+    if (this.state.element) {
+      this.state.element.dispose();
+      this.state.element = null;
+    }
+    if (wait) {
+      const options = { timeout: opts.wait || this.timeout };
+      if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
+      try {
+        await wait(page, options);
+      } catch(e) {
+        if (!this.state.not) {
+          console.log('throw exception ' + e);
+          throw e;
+        }
+        this.state.not = false;
+      }
+    }
+    const element = await $(page);
+    if (!not & !element) {
+      console.log('throw exception failed to select element');
+      throw new Error('failed to select element');
+    }
+    this.state = { type: type, selector, element, selopts: opts };
+    return element;
+  }
+
   // selectors
 
   /**
@@ -282,24 +310,12 @@ class Dalang extends State {
   *	@select
   * @param selector {string} css selector
   **/
-  async select(selector, opts = {}) {
-    const { page, not } = this.state;
-    if (this.state.element) {
-      this.state.element.dispose();
-      this.state.element = null;
-    }
-    const options = { timeout: opts.wait || this.timeout };
-    if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
-    try {
-      await page.waitForSelector(selector, options);
-    } catch(e) {
-      if (!this.state.not) throw e;
-      this.state.not = false;
-    }
-    const element = await page.$(selector);
-    if (!not & !element) throw new Error('failed to select element');
-    this.state = { type: "selector", selector, element, selopts: opts };
-    return element;
+  async select(selector, opts) {
+    return await this._selector(
+        selector, 'selector', opts,
+        async (page, opts) => await page.waitForSelector(selector, opts),
+        async (page) => await page.$(selector)
+      );
   }
 
   /**
@@ -307,24 +323,12 @@ class Dalang extends State {
   *	@xpath
   * @param xpath {string} xpath
   **/
-  async xpath(xpath, opts = {}) {
-    const { page, not } = this.state;
-    if (this.state.element) {
-      this.state.element.dispose();
-      this.state.element = null;
-    }
-    const options = { timeout: opts.wait || this.timeout };
-    if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
-    try {
-      await page.waitForXPath(xpath, options);
-    } catch(e) {
-      if (!this.state.not) throw e;
-      this.state.not = false;
-    }
-    const element = await page.$x(xpath);
-    if (!not & !element) throw new Error('failed to select element');
-    this.state = { type: "xpath", selector: xpath, element, selopts: opts };
-    return element;
+  async xpath(xpath, opts) {
+    return await this._selector(
+        xpath, 'xpath', opts,
+        async (page, opts) => await page.waitForXPath(xpath, opts),
+        async (page) => await page.$x(xpath)
+      );
   }
 
   /**
@@ -332,25 +336,24 @@ class Dalang extends State {
   *	@testid
   * @param testid {string} test id
   **/
-  async testid(testid, opts = {}) {
-    const { page, not } = this.state;
-    if (this.state.element) {
-      this.state.element.dispose();
-      this.state.element = null;
-    }
-    const options = { timeout: opts.wait || this.timeout };
-    if (options.timeout === 0) options.timeout = 1;           // waitForSelector timeout 0 means forever
+  async testid(testid, opts) {
     const selector = `*[test-id='${testid}']`;
-    try {
-      await page.waitForSelector(selector, options);
-    } catch(e) {
-      if (!this.state.not) throw e;
-      this.state.not = false;
-    }
-    const element = await page.$(selector);
-    if (!not && !element) throw new Error('failed to select element');
-    this.state = { type: "test-id", selector: testid, element, selopts: opts };
-    return element;
+    return await this._selector(
+        testid, 'test-id', opts,
+        async (page, opts) => await page.waitForSelector(selector, opts),
+        async (page) => await page.$(selector)
+      );
+  }
+
+  /**
+  * Set current element to the active (focused) element.
+  * @active
+  **/
+  async active() {
+    return await this._selector(
+        null, 'active', opts, null,
+        async (page) => await page.evaluate('document.activeElement')
+      );
   }
 
   // informational
@@ -408,7 +411,7 @@ class Dalang extends State {
         return;
       } catch(e) {
         exception = e;
-        await this.sleep(1);
+        await this.sleep(0.1);
         await this._reselect();
       }
     } while(this.timeout > 0);
@@ -427,6 +430,9 @@ class Dalang extends State {
       break;
     case "test-id":
       await this.testid(selector, selopts);
+      break;
+    case "active":
+      await this.active();
       break;
     }
     this.state.infoElement = null;  // force _nodeInfo() to requery details
