@@ -35,7 +35,7 @@ class Dalang extends State {
   }
 
   async run(script, config = {}) {
-    Object.assign(this.__config, config);
+    this.config(config);
     const parser = new Parser(this, { wordChars: /[A-Za-z0-9$#_\-]/ });
     await Jest.test(script, async () => {
       await parser.run(script, config.cwd || process.cwd()).catch(e => {
@@ -93,13 +93,20 @@ class Dalang extends State {
   // configuration
 
   config(config) {
-    this.__config = Object.assign(this.__config, config);
+    Object.assign(this.__config, config);
     console.log('CONFIG: ' + JSON.stringify(this.__config));
   }
 
   arg(arg) {
     const args = this.__config.args;
-    if (args.indexOf(arg) === -1) args.push(arg);
+    const name = arg.split('=')[0];
+    for (let i = 0; i < args.length; i++) {
+      if (args[i].split('=')[0] === name) {
+        args[i] = arg;
+        return;
+      }
+    }
+    args.push(arg);
   }
 
   // browser control
@@ -107,9 +114,11 @@ class Dalang extends State {
   async start({ width, height, args } = {}) {
     const { sloMo, headless, chrome } = this.__config;
     console.log(`LAUNCH: WIDTH ${width} HEIGHT ${height} HEADLESS ${headless} SLOMO ${sloMo} `);
-    args = [].concat(args||[]);
-    this.config({ args });
+    this.__config.args = [];
+    if (this.__config.language) this.arg('--lang=' + this.__config.language);
     if (width && height) this.arg(`--window-size=${width+chrome.x},${height+chrome.y}`);
+    args.forEach(arg => this.arg(arg));
+    args = this.__config.args;
     args.push('--no-startup-window');
     args.push('--disable-dev-shm-usage');
     args.push('--disable-crash-reporter');
