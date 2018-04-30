@@ -399,25 +399,26 @@ class DalangParser extends StringTokeniser {
         break;
       case "browser":
         let { browser } = this;
+        let option, pref, value, chrome, size;
         switch(next(STRING).token) {
         case "option":
-          const option = next(STRING).token;
-          console.log(`TODO: browser option ${option}`);
+          option = next(STRING).token;
+          this.log(initial, `browser option ${pref} ${value}`);
           this.options.push(option);
           break;
         case "prefs":
-          const pref = next(STRING).token;
-          const value = next(STRING).token;
-          console.log(`TODO: browser prefs ${pref} ${value}`);
+          pref = next(STRING).token;
+          value = next(STRING).token;
+          this.log(initial, `TODO: browser prefs ${pref} ${value}`);
           this.prefs.push({ pref, value });
           break;
         case "start":
           browser = this.browser = {};
-          dalang.config({ headless: false, sloMo: 150 });
+          dalang.config({ sloMo: 150 });
           this.log(initial,`${statement} start`); 			// is a no-op we start later when we do browser size or get
           break;
         case "chrome":
-          const chrome = browser.chrome = {};
+          chrome = browser.chrome = {};
           chrome.x = next(NUMBER).token;
           next(SYMBOL, ',');
           chrome.y = next(NUMBER).token;
@@ -425,7 +426,7 @@ class DalangParser extends StringTokeniser {
           dalang.config({ chrome });
           break;
         case "size":
-          const size = browser.size = {};
+          size = browser.size = {};
           size.width = next(NUMBER).token;
           next(SYMBOL, ',');
           size.height = next(NUMBER).token;
@@ -454,9 +455,16 @@ class DalangParser extends StringTokeniser {
           this.log(initial, `${statement} refresh`);
           await dalang.refresh();
           break;
+
+        // New to dalang, not supported by ScriptDriver 
         case "send":
           arg = next(STRING).token;
           await dalang.browser(arg, JSON.parse(next(STRING).token));
+          break;
+        case "headless":
+          value = next(NUMBER).token;
+          this.log(initial, `browser headless ${value}`);
+          dalang.config({ headless: !!value });
           break;
         default:
           Unexpected(token);
