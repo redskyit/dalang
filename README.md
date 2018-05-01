@@ -2,7 +2,7 @@
 A simplified puppeteer for use with puppeteer.  Includes both an API for use in node, and a scripting language called dalang script.
 
 # Versions
-0.1.1 alpha (in-development)
+0.1.2 alpha (in-development)
 
 ## Overview
 
@@ -17,13 +17,13 @@ Simple and quick was the goal behind this project.
 
 ## Release Notes
 
-Version `0.1.1` is now available.
+Version `0.1.2` is now available.
 
 ## Example dalang script
 
     browser headless 0
-    browser size 1024,768
     browser start
+    browser size 1024,768
     browser get "https://github.com/search/"
     wait 30
     select "*[name='q']" 
