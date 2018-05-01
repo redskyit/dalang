@@ -2,12 +2,12 @@
 A simplified puppeteer for use with puppeteer.  Includes both an API for use in node, and a scripting language called dalang script.
 
 # Versions
-0.1.0 alpha (in-development)
+0.1.1 alpha (in-development)
 
 ## Overview
 
-dalang abstracts the puppeteer API, allowing you to focus on writing tests. It is 
-a simple yet powerful API and scripting language, designed to take much of the 
+dalang abstracts the puppeteer API, allowing the focus to be on writing tests. It 
+is a simple yet powerful API and scripting language, designed to take much of the 
 pain out of writing and updating automation and regression tests for web pages.  
 Puppeteer is a powerful automation tool for google chrome, but it requires a 
 fair amount of code to do even the simplest things.  The idea behind dalang and 
