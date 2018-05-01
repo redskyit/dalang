@@ -117,7 +117,7 @@ class Dalang extends State {
     this.__config.args = [];
     if (this.__config.language) this.arg('--lang=' + this.__config.language);
     if (width && height) this.arg(`--window-size=${width+chrome.x},${height+chrome.y}`);
-    args.forEach(arg => this.arg(arg));
+    if (args) args.forEach(arg => this.arg(arg));
     args = this.__config.args;
     args.push('--no-startup-window');
     args.push('--disable-dev-shm-usage');
