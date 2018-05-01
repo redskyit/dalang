@@ -414,7 +414,7 @@ class DalangParser extends StringTokeniser {
           break;
         case "start":
           browser = this.browser = {};
-          dalang.config({ sloMo: 150 });
+          dalang.config({ sloMo: 0 });
           this.log(initial,`${statement} start`); 			// is a no-op we start later when we do browser size or get
           break;
         case "chrome":
@@ -426,6 +426,7 @@ class DalangParser extends StringTokeniser {
           dalang.config({ chrome });
           break;
         case "size":
+          if (!browser) browser = this.browser = {};
           size = browser.size = {};
           size.width = next(NUMBER).token;
           next(SYMBOL, ',');
@@ -434,6 +435,7 @@ class DalangParser extends StringTokeniser {
           await dalang.viewport(size);
           break;
         case "get":
+          if (!browser) browser = this.browser = {};
           if (!browser.page) {
             browser.page = await this.start(Object.assign({}, browser.size, { args: this.options }));
           }
