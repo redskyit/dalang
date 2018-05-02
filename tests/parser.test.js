@@ -3,5 +3,5 @@ const dalang = require('../dalang');
 //	await dalang.run('parser.test');
 // });
 (async function() { 
-	await dalang.run('parser.test'); 
+	await dalang.run('parser.test', { headless: false }); 
 })();
