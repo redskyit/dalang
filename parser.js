@@ -37,7 +37,7 @@ class DalangParser extends StringTokeniser {
       fs.readFile(fn, { encoding: "utf8" }, (err, data) => {
         if (err) r(err); 
         else {
-          const tokeniser = new StringTokeniser({ });
+          const tokeniser = new StringTokeniser();
           tokeniser.set(data);
           ok({ tokeniser, fn, dirname: path.dirname(fn) });
         }
@@ -61,23 +61,47 @@ class DalangParser extends StringTokeniser {
     console.log('');
   }
 
-  async run(script, cwd, lineno) {
-    const { tokeniser, fn, dirname } = await this.open(script, cwd);
-    this.scripts.push({ cwd: dirname, name: path.basename(script), lineno });
+  // Consume and run tokens until EOF
+  async _run(tokeniser, cwd) {
     let token = tokeniser.next();
     let next;
     while (token.type !== EOF) {
       // console.log('run: ', token);
       // Parse this token
       try {
-        next = await this.parseToken(token, tokeniser, { cwd: dirname });
+        next = await this.parseToken(token, tokeniser, cwd && { cwd });
         if (this.aborting) break;
       } catch(e) {
-        this.logException(token, e);
-        this.aborting = true;
-        break;
+        this.exceptionToken = token;
+        throw e;
       }
       token = next ? next : tokeniser.next();
+    }
+  }
+
+  async runString(script, name, cwd, lineno) {
+    const tokeniser = new StringTokeniser({},script);
+    this.scripts.push({ cwd, name, lineno });
+    try {
+      await this._run(tokeniser, cwd);
+    } catch(e) {
+      this.logException(this.exceptionToken, e);
+      this.aborting = true;   // tells parents to abort
+    }
+    this.scripts.pop();
+  }
+
+  async run(script, cwd, lineno) {
+    const { tokeniser, dirname } = await this.open(script, cwd);
+    cwd = dirname;      // the scripts cwd is relative to it
+    this.scripts.push({ cwd, name: path.basename(script), lineno });
+
+    // Run the script
+    try {
+      await this._run(tokeniser, cwd);
+    } catch(e) {
+      this.logException(this.exceptionToken, e);
+      this.aborting = true;   // tells parents to abort
     }
 
     // If leaving top level script, then run success/fail and stop browser
@@ -94,8 +118,7 @@ class DalangParser extends StringTokeniser {
       await this.stop();
     }
 
-    // Remove script from call stack
-    console.log(script + ' exiting ...');
+    // remove script from stack
     this.scripts.pop();
   }
 
@@ -171,17 +194,7 @@ class DalangParser extends StringTokeniser {
       }
     })(tokens);
 
-    let token = tokeniser.next();
-    let next;
-    while (token.type !== EOF) {
-      try {
-        next = await this.parseToken(token, tokeniser);
-      } catch(e) {
-        this.exceptionToken = token;
-        throw e;
-      }
-      token = next ? next : tokeniser.next();
-    }
+    await this._run(tokeniser, opts.cwd);
   }
 
   async runAlias(alias, args = null, lineno = 0) {
@@ -197,18 +210,19 @@ class DalangParser extends StringTokeniser {
 
   async exec(token, cmd, cwd) {
 
+    const buffers = { stdout: '', stderr: '' };
+
     // normalise path to command
-    if (!path.isAbsolute(cmd.name)) {
-      cmd.name = path.normalize(path.join(cwd, cmd.name));
-    }
-    this.log(token, `> ${cmd.name} ${cmd.args.join(' ')}`);
+    cmd.full = path.isAbsolute(cmd.name) ? cmd.name : path.normalize(path.join(cwd, cmd.name));
+    this.log(token, `> ${cmd.full} ${cmd.args.join(' ')}`);
 
     return new Promise((ok,r) => {
-      const proc = spawn(cmd.name, cmd.args, { cwd: process.cwd() });
+      const proc = spawn(cmd.full, cmd.args, { cwd: process.cwd() });
       let l = {};
-      function out(n,d) {
-        if (d) {
-          const lines = d.toString().split('\n');
+      function out(n,s) {
+        if (s) {
+          buffers[n] += s;
+          const lines = s.split('\n');
           if (l[n]) lines[0] = l[n] + lines[0];
           l[n] = lines.pop();
           lines.map(line => console.log(`${n}> ${line}`));
@@ -216,8 +230,8 @@ class DalangParser extends StringTokeniser {
           console.log(`${n}> ${l[n]}`);
         }
       }
-      proc.stdout.on('data', (data) => out('stdout',data));
-      proc.stderr.on('data', (data) => out('stderr',data));
+      proc.stdout.on('data', (data) => out('stdout',data.toString()));
+      proc.stderr.on('data', (data) => out('stderr',data.toString()));
       proc.on('close', (code) => {
         out('stdout'); out('stderr');
         if (code !== 0) {
@@ -225,7 +239,7 @@ class DalangParser extends StringTokeniser {
           this.log(token, e);
           r(e);
         } else {
-          ok();
+          ok(buffers);
         }
       });
     });
@@ -270,6 +284,7 @@ class DalangParser extends StringTokeniser {
   }
 
   async parseToken(token, tokeniser, opts) {
+
     const { dalang, aliases, state } = this;
     const { skip } = state;
     const { cwd } = opts || {};
@@ -749,7 +764,7 @@ class DalangParser extends StringTokeniser {
           break;
         }
         break;
-      case "exec":
+      case "exec": case "exec-include":
         initial = token;
         exec = { name: next(STRING).token };
         exec.args = consume('()', token.lineno, ',');           // consume arguments (...)
@@ -759,8 +774,12 @@ class DalangParser extends StringTokeniser {
         exec.args = exec.args.map(arg => arg.token);
         this.log(initial,`${statement} ${exec.name} ${exec.args.join(' ')}`);
         if (!skip) {
+          let output;
           try {
-            await this.exec(initial, exec, cwd);
+            output = await this.exec(initial, exec, cwd);
+            if (output && statement === 'exec-include') {
+                await this.runString(output.stdout, exec.name, cwd, initial.lineno);
+            }
             condition(true);
           } catch(e) {
             condition(false,e);
@@ -842,11 +861,12 @@ class DalangParser extends StringTokeniser {
         initial = token;
         arg = { tokens: consume('{}', token.lineno) };
         this.log(initial, initial.token + ` { ${arg.tokens.map(token => token.token).join(' ')} }`);
-        while (1) {
+        let done;
+        while (!done) {
           try {
-            await this.runTokens(arg.tokens, { fail: false });
+            await this.runTokens(arg.tokens);
           } catch(e) {
-            break;
+            done = true;
           }
         }
         break;
