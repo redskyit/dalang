@@ -667,13 +667,13 @@ class Dalang extends State {
 
   async mouseCenter() {
     const { page, mouse, element } = this.state;
-    const box = await (mouse.element || element).boundingBox();
+    const box = await this._boundingBox(mouse.element || element);
     await this.mouseMoveTo(mouse.pos = { x: (box.width/2) | 0, y: (box.height/2) | 0 });
   }
 
   async mouseClick() {
     const { page, mouse, element } = this.state;
-    const box = await (mouse.element || element).boundingBox();
+    const box = await this._boundingBox(mouse.element || element);
     await page.mouse.click(box.x + mouse.pos.x, box.y + mouse.pos.y);
   }
 
@@ -684,14 +684,14 @@ class Dalang extends State {
 
   async mouseMoveTo(xy) {
     const { page, mouse, element } = this.state;
-    const box = await (mouse.element || element).boundingBox();
+    const box = await this._boundingBox(mouse.element || element);
     mouse.pos = Object.assign({}, xy);
     await page.mouse.move(box.x + xy.x, box.y + xy.y);
   }
 
   async mouseMoveBy(xy) {
     const { page, mouse, element } = this.state;
-    const box = await (mouse.element || element).boundingBox();
+    const box = await this._boundingBox(mouse.element || element);
     mouse.pos.x += xy.x;
     mouse.pos.y += xy.y;
     await page.mouse.move(box.x + mouse.pos.x, box.y + mouse.pos.y);
@@ -711,6 +711,20 @@ class Dalang extends State {
   async refresh() {
     const { page } = this.state;
     await page.evaluate('location.reload()');
+    await page.waitForNavigation({ waitUntil: 'networkidle0' });
+    await this._injectDalangBrowserAPI();
+  }
+
+  async back() {
+    const { page } = this.state;
+    await page.evaluate('history.back()');
+    await page.waitForNavigation({ waitUntil: 'networkidle0' });
+    await this._injectDalangBrowserAPI();
+  }
+
+  async forward() {
+    const { page } = this.state;
+    await page.evaluate('history.forward()');
     await page.waitForNavigation({ waitUntil: 'networkidle0' });
     await this._injectDalangBrowserAPI();
   }

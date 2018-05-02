@@ -453,11 +453,18 @@ class DalangParser extends StringTokeniser {
           state.browserWait = next(NUMBER).token;
           this.log(initial, `${statement} wait ${state.browserWait}`);
           break;
+        case "back":
+          this.log(initial, `${statement} back`);
+          await dalang.refresh();
+          break;
+        case "forward":
+          this.log(initial, `${statement} forward`);
+          await dalang.refresh();
+          break;
         case "refresh":
           this.log(initial, `${statement} refresh`);
           await dalang.refresh();
           break;
-
         // New to dalang, not supported by ScriptDriver 
         case "send":
           arg = next(STRING).token;
