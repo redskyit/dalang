@@ -297,7 +297,6 @@ class Dalang extends State {
         await wait(page, options);
       } catch(e) {
         if (!this.state.not) {
-          console.log('throw exception ' + e);
           throw e;
         }
         this.state.not = false;
@@ -305,7 +304,6 @@ class Dalang extends State {
     }
     const element = await $(page);
     if (!not & !element) {
-      console.log('throw exception failed to select element');
       throw new Error('failed to select element');
     }
     this.state = { type: type, selector, element, selopts: opts };
