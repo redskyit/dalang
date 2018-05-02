@@ -153,11 +153,11 @@ class Tokeniser {
 class StringTokeniser extends Tokeniser {
   constructor(options, string) {
     super(options);
-	if (string) set(string);
+    if (string) this.set(string);
   }
   set(string) {
-	this.string = string;
-	this.pos = 0;
+    this.string = string;
+    this.pos = 0;
   }
   get() {
     return this.string[this.pos++];
