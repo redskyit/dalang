@@ -107,6 +107,7 @@ class DalangParser extends StringTokeniser {
     // If leaving top level script, then run success/fail and stop browser
     if (this.scripts.length === 1) {
       if (this.aborting) {
+        this.aborting = false;  // clear aborting flag else final aliases won't run
         const onfail = this.aliases["--onfail"];
         if (onfail) await this.runAlias(onfail);
       } else {
