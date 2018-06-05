@@ -2,7 +2,8 @@
 A simplified puppeteer for use with puppeteer.  Includes both an API for use in node, and a scripting language called dalang script.
 
 # Versions 
-0.1.4-alpha.1 (latest)
+0.1.4-alpha.2 (latest)
+0.1.4-alpha.1
 0.1.3
 
 ## Overview
