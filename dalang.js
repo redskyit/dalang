@@ -112,7 +112,7 @@ class Dalang extends State {
   // browser control
 
   async start({ width, height, args } = {}) {
-    const { sloMo, headless, chrome } = this.__config;
+    const { sloMo, headless, chrome, executablePath } = this.__config;
     console.log(`LAUNCH: WIDTH ${width} HEIGHT ${height} HEADLESS ${headless} SLOMO ${sloMo} `);
     this.__config.args = [];
     if (this.__config.language) this.arg('--lang=' + this.__config.language);
@@ -124,7 +124,7 @@ class Dalang extends State {
     args.push('--disable-crash-reporter');
     args.push('--disable-breakpad');      // crash reporter can cause browser.close() to hang
     console.dir(args);
-    const browser = await puppeteer.launch({ headless, sloMo, args });
+    const browser = await puppeteer.launch({ headless, sloMo, args, executablePath });
     console.log('browser endpoint ' + browser.wsEndpoint());
     browser.on('disconnected', () => console.log(`browser disconnected`));
     const pages = await browser.pages();
