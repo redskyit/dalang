@@ -119,14 +119,15 @@ class Dalang extends State {
     if (width && height) this.arg(`--window-size=${width+chrome.x},${height+chrome.y}`);
     if (args) args.forEach(arg => this.arg(arg));
     args = this.__config.args;
-    args.push('--no-startup-window');
     args.push('--disable-dev-shm-usage');
     args.push('--disable-crash-reporter');
     args.push('--disable-breakpad');      // crash reporter can cause browser.close() to hang
     console.dir(args);
+
     const browser = await puppeteer.launch({ headless, sloMo, args, executablePath });
     console.log('browser endpoint ' + browser.wsEndpoint());
     browser.on('disconnected', () => console.log(`browser disconnected`));
+
     const pages = await browser.pages();
     if (pages.length === 0) {
         pages.push(await browser.newPage());
@@ -144,7 +145,13 @@ class Dalang extends State {
       const { chrome } = this.__config;
       height += chrome.y;
       width += chrome.x;
-      const { targetInfos: [{ targetId }]} = await _connection.send('Target.getTargets');
+      const { targetInfos } = await _connection.send('Target.getTargets');
+      let targetId;
+      for (let i = 0; i < targetInfos.length; i++) {
+        if (targetInfos[i].type === 'page') {
+          targetId = targetInfos[i].targetId;
+        }
+      }
       const { windowId } = await _connection.send('Browser.getWindowForTarget', { targetId });
       await _connection.send('Browser.setWindowBounds', { bounds: { height, width }, windowId });
     }

@@ -1,6 +1,6 @@
 {
   "name": "dalang",
-  "version": "0.1.4-alpha.2",
+  "version": "0.1.4-alpha.3",
   "description": "A simplified puppeteer for use with puppeteer (alpha pre-release)",
   "main": "dalang.js",
   "scripts": {
@@ -24,7 +24,7 @@
   "dependencies": {
     "crc": "^3.5.0",
     "ps-node": "^0.1.6",
-    "puppeteer": "^1.3.0-next.1525135284208"
+    "puppeteer": "^1.11.0"
   },
   "devDependencies": {
     "jest": "^22.2.1",
