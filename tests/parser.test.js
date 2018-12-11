@@ -3,5 +3,7 @@ const dalang = require('../dalang');
 //	await dalang.run('parser.test');
 // });
 (async function() { 
-	await dalang.run('parser.test', { headless: false }); 
+	await dalang.run('parser.test', { headless: false, 
+		executablePath: process.env.CHROME_PATH
+	}); 
 })();
