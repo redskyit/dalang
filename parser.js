@@ -289,7 +289,7 @@ class DalangParser extends StringTokeniser {
     const { dalang, aliases, state } = this;
     const { skip } = state;
     const { cwd } = opts || {};
-    let arg, alias, nextToken, fn, call, exec, initial, statement, u;
+    let arg, alias, nextToken, fn, call, exec, initial, statement, u, charCode;
 
     // if automatice logging is enabled, then copy browser log to output
     if (state.autoLog) {
@@ -739,6 +739,28 @@ class DalangParser extends StringTokeniser {
           await dalang.send(arg);
         }
         break;
+      case "press":
+        arg = next(STRING).token;
+        this.log(initial,`${statement} "${arg}"`);
+        if (!skip) {
+          await dalang.press(arg);
+        }
+        break;
+      case "sendkey":
+        arg = next(STRING).token;
+        switch(arg) {
+        case "Enter": charCode = 13; break;
+        case "Tab": charCode = 9; break;
+        case "Space": charCode = 32; break;
+        default:
+          charCode = arg|0;
+          break;
+        }
+        this.log(initial,`${statement} ${arg}`);
+        if (!skip) {
+          await dalang.sendkey(charCode);
+        }
+        break;
       case "push":
         arg = next(STRING).token;
         switch (arg) {
@@ -874,6 +896,15 @@ class DalangParser extends StringTokeniser {
       case "scroll-into-view":
         this.log(token, token.token);
         await dalang.scrollIntoView();
+        break;
+      case "wait-for":
+        arg = next(STRING).token;
+        this.log(initial,`${statement} "${arg}"`);
+        switch(arg) {
+        case "navigation":
+          await dalang.waitForNavigation();
+          break;
+        }
         break;
       default:
         initial = token;

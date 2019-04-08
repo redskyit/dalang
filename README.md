@@ -9,13 +9,10 @@ A simplified puppeteer for use with puppeteer.  Includes both an API for use in 
 
 ## Overview
 
-dalang abstracts the puppeteer API, allowing the focus to be on writing tests. It 
-is a simple yet powerful API and scripting language, designed to take much of the 
-pain out of writing and updating automation and regression tests for web pages.  
-Puppeteer is a powerful automation tool for google chrome, but it requires a 
-fair amount of code to do even the simplest things.  The idea behind dalang and 
-dalang script is to hide all the complication inside the API and script engine 
-and expose the power of puppeteer through the simplest of APIs or commands.  
+dalang abstracts the puppeteer API, allowing the focus to be on writing tests. It is a simple yet powerful API and scripting language, designed to take much of the pain out of writing and updating automation and regression tests for web pages.  
+
+Puppeteer is a powerful automation tool for google chrome, but it requires a fair amount of code to do even the simplest things.  The idea behind dalang and dalang script is to hide all the complication inside the API and script engine and expose the power of puppeteer through the simplest of APIs or commands.  
+
 Simple and quick was the goal behind this project.
 
 ## Release Notes

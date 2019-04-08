@@ -629,6 +629,25 @@ class Dalang extends State {
     }
   }
 
+  async sendkey(charCode) {
+    this._assertions();
+    try {
+      return await this.state.element.type(String.fromCharCode(charCode));
+    } catch(e) {
+      throw e;
+    }
+  }
+
+  async press(key) {
+    const { page } = this.state;
+    this._assertions();
+    try {
+      return await page.keyboard.press(key);
+    } catch(e) {
+      throw e;
+    }
+  }
+
   async click() {
     const { page, element } = this.state;
     this._assertions(element);
@@ -730,6 +749,12 @@ class Dalang extends State {
   async forward() {
     const { page } = this.state;
     await page.evaluate('history.forward()');
+    await page.waitForNavigation({ waitUntil: 'networkidle0' });
+    await this._injectDalangBrowserAPI();
+  }
+
+  async waitForNavigation() {
+    const { page } = this.state;
     await page.waitForNavigation({ waitUntil: 'networkidle0' });
     await this._injectDalangBrowserAPI();
   }
