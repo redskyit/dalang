@@ -1,10 +1,10 @@
 {
   "name": "dalang",
-  "version": "0.1.4-alpha.3",
+  "version": "0.1.5-alpha.1",
   "description": "A simplified puppeteer for use with puppeteer (alpha pre-release)",
   "main": "dalang.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "repository": {
     "type": "git",
@@ -24,7 +24,7 @@
   "dependencies": {
     "crc": "^3.5.0",
     "ps-node": "^0.1.6",
-    "puppeteer": "^1.11.0"
+    "puppeteer": "^1.20.0"
   },
   "devDependencies": {
     "jest": "^24.7.1",
