@@ -22,6 +22,7 @@ browser prefs "credentials_enable_service" false
 browser prefs "password_manager_enabled" false
 
 // start the browser
+// browser connect // TODO WIP
 browser start
 BROWSER_WAIT_ON
 browser chrome 0,74                     /* height +74 for chrome */

@@ -252,7 +252,6 @@ class DalangParser extends StringTokeniser {
       // need to start browser
       this.page = await dalang.start(options);
       this.captureConsole();
-      return page;
     }
     return page;
   }
@@ -261,6 +260,15 @@ class DalangParser extends StringTokeniser {
     console.log('parser: dalang.close()');
     await this.dalang.close();
     console.log('parser: closed');
+  }
+
+  async connect({ websocket } = {}) {
+    const { dalang, page } = this;
+    if (!page) {
+      this.page = await dalang.connect({ websocket });
+      this.captureConsole();
+    }
+    return page;
   }
 
   async captureConsole() {
@@ -432,6 +440,12 @@ class DalangParser extends StringTokeniser {
           browser = this.browser = {};
           dalang.config({ sloMo: 0 });
           this.log(initial,`${statement} start`); 			// is a no-op we start later when we do browser size or get
+          break;
+        case "connect":
+          const websocket = next(STRING).token;
+          browser = this.browser = { websocket };
+          dalang.config({ sloMo: 0 });
+          browser.page = await this.start(Object.assign({}, this.options, { websocket }));
           break;
         case "chrome":
           chrome = browser.chrome = {};

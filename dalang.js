@@ -109,6 +109,18 @@ class Dalang extends State {
     args.push(arg);
   }
 
+  // connect to browser over websocket
+  async connect() {
+    const { sloMo, chrome, websocket } = this.__config;
+    console.log(`CONNECT: URL ${websocket} SLOMO ${sloMo} `);
+    const browser = await puppeteer.connect({ browserWSEndpoint: websocket });
+    console.log('browser endpoint ' + browser.wsEndpoint());
+    browser.on('disconnected', () => console.log(`browser disconnected`));
+    const pages = await browser.pages();
+    this.state = { browser, pages, page: pages[0] };
+    return pages[0];
+  }
+
   // browser control
 
   async start({ width, height, args } = {}) {
