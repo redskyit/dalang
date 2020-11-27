@@ -1,6 +1,6 @@
 {
   "name": "dalang",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.6-alpha.3",
   "description": "A simplified puppeteer for use with puppeteer (alpha pre-release)",
   "main": "dalang.js",
   "scripts": {
