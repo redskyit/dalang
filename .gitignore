@@ -1,6 +1,7 @@
 # Custom
 tests/*.png
 *.png
+debug.js
 
 # Logs
 logs
