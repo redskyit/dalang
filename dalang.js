@@ -402,6 +402,10 @@ class Dalang extends State {
     return await this.state.page.evaluate(`window.RegressionTest.test("${name}", [ ${args.join(',')} ])`);
   }
 
+  async js(code) {
+    return await this.state.page.evaluate(code);
+  }
+
   // The wait timeout.  
   // When a wait timer is set in dalang (wait S) at point of being set, the timer starts.
   // commands that run following a wait timer being set will have their timeout calculates 
