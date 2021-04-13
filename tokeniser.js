@@ -29,7 +29,7 @@ class Tokeniser {
     quoteChars = '"\'',
     slashStarComments = true,
     slashSlashComments = true,
-    whiteSpace = /[ 	\n]/,
+    whiteSpace = /[\t \n]/,
     wordChars = /[A-Za-z0-9$#_\-.]/
   } = {}) {
     this.options = { qc: quoteChars, sstc: slashStarComments, sslc: slashSlashComments };
@@ -53,8 +53,10 @@ class Tokeniser {
     let token = this.token = '';
     let nextch = this.nextch = undefined;
     let type = this.type = EOF;
+    let lws = '';
     let q;
     while (l.type(ch) === SPACE) {			// consume white space
+      lws += ch;
       ch = this.getch();
     }
     while (ch !== undefined) {
@@ -140,7 +142,7 @@ class Tokeniser {
     if (type === NUMBER) {
       token = parseFloat(token);
     }
-    return { token, type, nextch, lineno: this.lineno, quote: this.quote };
+    return { token, type, nextch, lineno: this.lineno, quote: this.quote, lws };
   }
   peek() {
     if (this.nextToken) return this.nextToken;

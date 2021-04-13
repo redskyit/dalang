@@ -524,6 +524,22 @@ class DalangParser extends StringTokeniser {
           }
         }
         break;
+      case "script":
+        call = {
+          // EXPERIMENTAL: Reconstruct code from tokens between ` and `
+          code: consume('``', token.lineno).map(token => {
+                  return token.lws + (token.quote ? token.quote + token.token + token.quote : token.token);
+                }).join('')
+        };
+        this.log(initial, `${statement}` + ' `' + call.code + '`');
+        if (!skip) {
+          try {
+            await dalang.js(call.code);
+          } catch(e) {
+            console.dir(e);
+          }
+        }
+        break;
       case "alias": case "function":    // function is an alias for alias, but implies arguments
         initial = token;
         alias = { name: next(STRING).token };

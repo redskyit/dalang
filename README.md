@@ -2,7 +2,8 @@
 A simplified puppeteer for use with puppeteer.  Includes both an API for use in node, and a scripting language called dalang script.
 
 # Versions 
-* 0.1.6-alpha.3 (latest) (based on puppeteer 5.5)
+* 0.1.6-alpha.4 (latest) (based on puppeteer 5.5)
+* 0.1.6-alpha.3 (based on puppeteer 5.5)
 * 0.1.5-alpha.4 (based on puppeteer 1.20)
 * 0.1.4-alpha.3 (based on puppeteer 1.11)
 * 0.1.4-alpha.2
@@ -19,7 +20,8 @@ Simple and quick was the goal behind this project.
 
 ## Release Notes
 
-* Version `0.1.6.alpha.3` is now available.
+* Version `0.1.6.alpha.4` is now available.
+  - Adds a new `script` command.
 
 ## Example dalang script
 
