@@ -24,7 +24,7 @@
   "dependencies": {
     "crc": "^3.5.0",
     "ps-node": "^0.1.6",
-    "puppeteer": "^5.5.0"
+    "puppeteer": "^18.2.0"
   },
   "devDependencies": {
     "jest": "^26.6.3",
